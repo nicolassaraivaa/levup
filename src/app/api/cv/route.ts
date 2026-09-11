@@ -15,10 +15,11 @@ export async function POST(req: NextRequest) {
     vaga,
   } = await req.json();
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 4096,
-    system: `Você é um especialista em recrutamento e criação de currículos otimizados para ATS (Applicant Tracking Systems).
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 4096,
+      system: `Você é um especialista em recrutamento e criação de currículos otimizados para ATS (Applicant Tracking Systems).
 
 Sua função é gerar currículos profissionais em formato Markdown que:
 - Sejam otimizados para sistemas ATS
@@ -28,10 +29,10 @@ Sua função é gerar currículos profissionais em formato Markdown que:
 - Sejam adequados para desenvolvedores júnior brasileiros
 
 Responda APENAS com o currículo em Markdown, sem explicações adicionais.`,
-    messages: [
-      {
-        role: "user",
-        content: `Gere um currículo profissional otimizado para ATS com os seguintes dados:
+      messages: [
+        {
+          role: "user",
+          content: `Gere um currículo profissional otimizado para ATS com os seguintes dados:
 
 **Dados Pessoais:**
 - Nome: ${nome}
@@ -56,10 +57,18 @@ ${habilidades}
 ${vaga}
 
 Gere um currículo completo, profissional e otimizado para essa vaga específica.`,
-      },
-    ],
-  });
+        },
+      ],
+    });
 
-  const cv = message.content[0].type === "text" ? message.content[0].text : "";
-  return NextResponse.json({ cv });
+    const cv =
+      message.content[0].type === "text" ? message.content[0].text : "";
+    return NextResponse.json({ cv });
+  } catch (error) {
+    console.error("Erro na API de CV:", error);
+    return NextResponse.json(
+      { error: "Não foi possível gerar o CV. Tente novamente em instantes." },
+      { status: 502 },
+    );
+  }
 }

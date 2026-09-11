@@ -3,8 +3,35 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import type { Profile, Mensagem, FeedbackEntrevista } from "@/lib/types";
+import Sidebar from "@/components/Sidebar";
+import {
+  Mic,
+  Code2,
+  Users,
+  Lightbulb,
+  BarChart3,
+  FileText,
+  CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
+  ArrowRight,
+} from "lucide-react";
 
 const MAX_MENSAGENS = 10;
+
+async function postEntrevista(body: object) {
+  const res = await fetch("/api/entrevistas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Não foi possível processar sua solicitação.");
+  }
+  return data;
+}
 
 export default function EntrevistasPage() {
   const [etapa, setEtapa] = useState<"config" | "entrevista" | "feedback">(
@@ -12,11 +39,12 @@ export default function EntrevistasPage() {
   );
   const [tipo, setTipo] = useState<"tecnica" | "comportamental">("tecnica");
   const [idioma, setIdioma] = useState<"PT" | "EN">("PT");
-  const [mensagens, setMensagens] = useState<any[]>([]);
+  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [inputUsuario, setInputUsuario] = useState("");
   const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [erro, setErro] = useState("");
+  const [feedback, setFeedback] = useState<FeedbackEntrevista | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [totalRespostas, setTotalRespostas] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -39,6 +67,7 @@ export default function EntrevistasPage() {
       setProfile(data);
     }
     loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -47,25 +76,38 @@ export default function EntrevistasPage() {
 
   async function iniciarEntrevista() {
     setLoading(true);
+    setErro("");
     setEtapa("entrevista");
 
-    const res = await fetch("/api/entrevistas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tipo, idioma, etapa: "iniciar", mensagens: [] }),
-    });
-    const data = await res.json();
-
-    const primeiraMensagem = { role: "assistant", content: data.resposta };
-    setMensagens([primeiraMensagem]);
-    setLoading(false);
+    try {
+      const data = await postEntrevista({
+        tipo,
+        idioma,
+        etapa: "iniciar",
+        mensagens: [],
+      });
+      const primeiraMensagem: Mensagem = {
+        role: "assistant",
+        content: data.resposta,
+      };
+      setMensagens([primeiraMensagem]);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setEtapa("config");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function enviarResposta() {
     if (!inputUsuario.trim() || loading) return;
     setLoading(true);
+    setErro("");
 
-    const novaMensagemUsuario = { role: "user", content: inputUsuario };
+    const novaMensagemUsuario: Mensagem = {
+      role: "user",
+      content: inputUsuario,
+    };
     const novasMensagens = [...mensagens, novaMensagemUsuario];
     setMensagens(novasMensagens);
     setInputUsuario("");
@@ -73,55 +115,49 @@ export default function EntrevistasPage() {
     const novasRespostas = totalRespostas + 1;
     setTotalRespostas(novasRespostas);
 
-    if (novasRespostas >= MAX_MENSAGENS / 2) {
-      // Gerar feedback
-      const res = await fetch("/api/entrevistas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    try {
+      if (novasRespostas >= MAX_MENSAGENS / 2) {
+        // Gerar feedback
+        const data = await postEntrevista({
           tipo,
           idioma,
           etapa: "feedback",
           mensagens: novasMensagens,
-        }),
-      });
-      const data = await res.json();
-      setFeedback(data.feedback);
-
-      // Salvar no Supabase
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("interview_sessions").insert({
-          user_id: user.id,
-          type: tipo,
-          language: idioma,
-          messages: novasMensagens,
-          feedback: data.feedback,
         });
-      }
+        setFeedback(data.feedback);
 
-      setEtapa("feedback");
-    } else {
-      const res = await fetch("/api/entrevistas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        // Salvar no Supabase
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("interview_sessions").insert({
+            user_id: user.id,
+            type: tipo,
+            language: idioma,
+            messages: novasMensagens,
+            feedback: data.feedback,
+          });
+        }
+
+        setEtapa("feedback");
+      } else {
+        const data = await postEntrevista({
           tipo,
           idioma,
           etapa: "responder",
           mensagens: novasMensagens,
-        }),
-      });
-      const data = await res.json();
-      setMensagens((prev) => [
-        ...prev,
-        { role: "assistant", content: data.resposta },
-      ]);
+        });
+        setMensagens((prev) => [
+          ...prev,
+          { role: "assistant", content: data.resposta },
+        ]);
+      }
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   function reiniciar() {
@@ -134,58 +170,7 @@ export default function EntrevistasPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-2xl font-black text-white">Levup</h1>
-          <p className="text-gray-400 text-sm mt-1">Acelere sua carreira</p>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          <a
-            href="/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition"
-          >
-            🏠 Dashboard
-          </a>
-          <a
-            href="/diagnostico"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition"
-          >
-            🎯 Diagnóstico
-          </a>
-          <a
-            href="/entrevistas"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-cyan-600 text-white font-medium"
-          >
-            🎤 Simulador de Entrevistas
-          </a>
-          <a
-            href="/auditoria"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition"
-          >
-            🔍 Auditoria de Perfil
-          </a>
-          <a
-            href="/cv"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition"
-          >
-            📄 Gerador de CV
-          </a>
-        </nav>
-        <div className="p-4 border-t border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-sm">
-              {profile?.name?.[0]?.toUpperCase() || "U"}
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">
-                {profile?.name || "Usuário"}
-              </p>
-              <p className="text-xs text-gray-400">{profile?.area || ""}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Sidebar active="/entrevistas" profile={profile} />
 
       {/* Main */}
       <div className="ml-64 flex flex-col h-screen">
@@ -193,14 +178,22 @@ export default function EntrevistasPage() {
         {etapa === "config" && (
           <div className="p-8 max-w-2xl">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white">
-                🎤 Simulador de Entrevistas
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
+                <Mic size={24} className="text-cyan-400" />
+                Simulador de Entrevistas
               </h2>
               <p className="text-gray-400 mt-2">
                 Configure sua sessão de entrevista e pratique com feedback
                 imediato de IA.
               </p>
             </div>
+
+            {erro && (
+              <div className="mb-6 bg-red-500/10 border border-red-800 rounded-xl p-4 text-sm text-red-300 flex gap-2.5">
+                <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                {erro}
+              </div>
+            )}
 
             <div className="space-y-6">
               {/* Tipo */}
@@ -217,7 +210,9 @@ export default function EntrevistasPage() {
                         : "border-gray-700 bg-gray-800 hover:border-gray-600"
                     }`}
                   >
-                    <div className="text-2xl mb-2">💻</div>
+                    <div className="w-9 h-9 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-2">
+                      <Code2 size={17} />
+                    </div>
                     <h4 className="font-bold text-white">Técnica</h4>
                     <p className="text-gray-400 text-sm mt-1">
                       Algoritmos, conceitos e boas práticas
@@ -231,7 +226,9 @@ export default function EntrevistasPage() {
                         : "border-gray-700 bg-gray-800 hover:border-gray-600"
                     }`}
                   >
-                    <div className="text-2xl mb-2">🤝</div>
+                    <div className="w-9 h-9 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-2">
+                      <Users size={17} />
+                    </div>
                     <h4 className="font-bold text-white">Comportamental</h4>
                     <p className="text-gray-400 text-sm mt-1">
                       Soft skills e experiências
@@ -252,7 +249,9 @@ export default function EntrevistasPage() {
                         : "border-gray-700 bg-gray-800 hover:border-gray-600"
                     }`}
                   >
-                    <div className="text-2xl mb-1">🇧🇷</div>
+                    <div className="text-xs font-bold tracking-wider text-cyan-400 mb-1.5">
+                      PT
+                    </div>
                     <p className="font-bold text-white">Português</p>
                   </button>
                   <button
@@ -263,25 +262,31 @@ export default function EntrevistasPage() {
                         : "border-gray-700 bg-gray-800 hover:border-gray-600"
                     }`}
                   >
-                    <div className="text-2xl mb-1">🇺🇸</div>
+                    <div className="text-xs font-bold tracking-wider text-cyan-400 mb-1.5">
+                      EN
+                    </div>
                     <p className="font-bold text-white">English</p>
                   </button>
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-cyan-800 rounded-xl p-4 text-sm text-gray-400">
-                💡 A entrevista terá{" "}
-                <strong className="text-white">5 perguntas</strong> e ao final
-                você receberá um feedback detalhado com score e dicas de
-                melhoria.
+              <div className="bg-gray-900 border border-cyan-800 rounded-xl p-4 text-sm text-gray-400 flex gap-2.5">
+                <Lightbulb size={16} className="text-cyan-400 shrink-0 mt-0.5" />
+                <span>
+                  A entrevista terá{" "}
+                  <strong className="text-white">5 perguntas</strong> e ao
+                  final você receberá um feedback detalhado com score e dicas
+                  de melhoria.
+                </span>
               </div>
 
               <button
                 onClick={iniciarEntrevista}
                 disabled={loading}
-                className="w-full bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition"
+                className="w-full bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition flex items-center justify-center gap-2"
               >
-                {loading ? "Iniciando entrevista..." : "Iniciar Entrevista →"}
+                {loading ? "Iniciando entrevista..." : "Iniciar Entrevista"}
+                {!loading && <ArrowRight size={17} />}
               </button>
             </div>
           </div>
@@ -293,10 +298,11 @@ export default function EntrevistasPage() {
             {/* Header */}
             <div className="p-4 border-b border-gray-800 flex items-center justify-between bg-gray-900">
               <div>
-                <h2 className="font-bold text-white">
-                  🎤 Entrevista{" "}
-                  {tipo === "tecnica" ? "Técnica" : "Comportamental"} —{" "}
-                  {idioma === "PT" ? "🇧🇷 PT" : "🇺🇸 EN"}
+                <h2 className="font-bold text-white flex items-center gap-2">
+                  <Mic size={16} className="text-cyan-400" />
+                  Entrevista {tipo === "tecnica" ? "Técnica" : "Comportamental"}
+                  {" — "}
+                  {idioma}
                 </h2>
                 <p className="text-gray-400 text-xs mt-0.5">
                   Pergunta {totalRespostas + 1} de 5
@@ -361,6 +367,12 @@ export default function EntrevistasPage() {
 
             {/* Input */}
             <div className="p-4 border-t border-gray-800 bg-gray-900">
+              {erro && (
+                <div className="mb-3 bg-red-500/10 border border-red-800 rounded-xl p-3 text-sm text-red-300 flex gap-2.5">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  {erro}
+                </div>
+              )}
               <div className="flex gap-3">
                 <textarea
                   value={inputUsuario}
@@ -399,8 +411,9 @@ export default function EntrevistasPage() {
         {etapa === "feedback" && feedback && (
           <div className="p-8 max-w-3xl overflow-y-auto">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white">
-                📊 Feedback da Entrevista
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
+                <BarChart3 size={24} className="text-cyan-400" />
+                Feedback da Entrevista
               </h2>
               <p className="text-gray-400 mt-1">
                 Entrevista {tipo} em {idioma === "PT" ? "Português" : "Inglês"}
@@ -422,14 +435,18 @@ export default function EntrevistasPage() {
 
             {/* Resumo */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
-              <h3 className="font-bold text-white mb-3">📝 Avaliação Geral</h3>
+              <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                <FileText size={16} className="text-gray-400" />
+                Avaliação Geral
+              </h3>
               <p className="text-gray-300 leading-relaxed">{feedback.resumo}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div className="bg-gray-900 border border-green-800 rounded-2xl p-6">
-                <h3 className="font-bold text-green-400 mb-3">
-                  ✅ Pontos Fortes
+                <h3 className="font-bold text-green-400 mb-3 flex items-center gap-2">
+                  <CheckCircle2 size={16} />
+                  Pontos Fortes
                 </h3>
                 <ul className="space-y-2">
                   {feedback.pontos_fortes?.map((p: string, i: number) => (
@@ -441,8 +458,9 @@ export default function EntrevistasPage() {
               </div>
 
               <div className="bg-gray-900 border border-red-800 rounded-2xl p-6">
-                <h3 className="font-bold text-red-400 mb-3">
-                  ⚠️ Pontos a Melhorar
+                <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2">
+                  <AlertTriangle size={16} />
+                  Pontos a Melhorar
                 </h3>
                 <ul className="space-y-2">
                   {feedback.pontos_melhoria?.map((p: string, i: number) => (
@@ -456,8 +474,9 @@ export default function EntrevistasPage() {
 
             {/* Dicas */}
             <div className="bg-gray-900 border border-cyan-800 rounded-2xl p-6 mb-6">
-              <h3 className="font-bold text-cyan-400 mb-3">
-                💡 Dicas para Próximas Entrevistas
+              <h3 className="font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                <Lightbulb size={16} />
+                Dicas para Próximas Entrevistas
               </h3>
               <ul className="space-y-2">
                 {feedback.dicas?.map((d: string, i: number) => (

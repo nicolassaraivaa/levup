@@ -3,11 +3,28 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import type { Profile } from "@/lib/types";
+import Sidebar from "@/components/Sidebar";
+import {
+  FileText,
+  User,
+  Target,
+  Briefcase,
+  GraduationCap,
+  Zap,
+  Loader2,
+  Sparkles,
+  Copy,
+  Pencil,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 
 export default function CVPage() {
   const [etapa, setEtapa] = useState<"formulario" | "resultado">("formulario");
   const [loading, setLoading] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
+  const [erro, setErro] = useState("");
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [cvGerado, setCvGerado] = useState("");
   const router = useRouter();
   const supabase = createClient();
@@ -49,6 +66,7 @@ export default function CVPage() {
       }
     }
     loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleChange(
@@ -60,16 +78,25 @@ export default function CVPage() {
   async function gerarCV(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setErro("");
 
-    const res = await fetch("/api/cv", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    setCvGerado(data.cv);
-    setEtapa("resultado");
-    setLoading(false);
+    try {
+      const res = await fetch("/api/cv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Não foi possível gerar o CV.");
+      }
+      setCvGerado(data.cv);
+      setEtapa("resultado");
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function copiarCV() {
@@ -79,66 +106,16 @@ export default function CVPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-2xl font-black text-white">Levup</h1>
-          <p className="text-gray-400 text-sm mt-1">Acelere sua carreira</p>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          <a
-            href="/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition"
-          >
-            🏠 Dashboard
-          </a>
-          <a
-            href="/diagnostico"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition"
-          >
-            🎯 Diagnóstico
-          </a>
-          <a
-            href="/entrevistas"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition"
-          >
-            🎤 Simulador de Entrevistas
-          </a>
-          <a
-            href="/auditoria"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition"
-          >
-            🔍 Auditoria de Perfil
-          </a>
-          <a
-            href="/cv"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-orange-600 text-white font-medium"
-          >
-            📄 Gerador de CV
-          </a>
-        </nav>
-        <div className="p-4 border-t border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-sm">
-              {profile?.name?.[0]?.toUpperCase() || "U"}
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">
-                {profile?.name || "Usuário"}
-              </p>
-              <p className="text-xs text-gray-400">{profile?.area || ""}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Sidebar active="/cv" profile={profile} />
 
       {/* Main */}
       <div className="ml-64 p-8 max-w-3xl">
         {etapa === "formulario" && (
           <div>
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white">
-                📄 Gerador de CV
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
+                <FileText size={24} className="text-orange-400" />
+                Gerador de CV
               </h2>
               <p className="text-gray-400 mt-2">
                 Preencha seus dados e informe a vaga desejada. A IA vai gerar um
@@ -149,7 +126,10 @@ export default function CVPage() {
             <form onSubmit={gerarCV} className="space-y-6">
               {/* Dados pessoais */}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-bold text-white mb-4">👤 Dados Pessoais</h3>
+                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                  <User size={16} className="text-gray-400" />
+                  Dados Pessoais
+                </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm text-gray-400 mb-1 block">
@@ -219,8 +199,9 @@ export default function CVPage() {
 
               {/* Vaga */}
               <div className="bg-gray-900 border border-orange-800 rounded-2xl p-6">
-                <h3 className="font-bold text-orange-400 mb-4">
-                  🎯 Vaga Desejada
+                <h3 className="font-bold text-orange-400 mb-4 flex items-center gap-2">
+                  <Target size={16} />
+                  Vaga Desejada
                 </h3>
                 <textarea
                   name="vaga"
@@ -235,8 +216,9 @@ export default function CVPage() {
 
               {/* Objetivo */}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-bold text-white mb-4">
-                  🎯 Objetivo Profissional
+                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                  <Target size={16} className="text-gray-400" />
+                  Objetivo Profissional
                 </h3>
                 <textarea
                   name="objetivo"
@@ -251,8 +233,9 @@ export default function CVPage() {
 
               {/* Experiências */}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-bold text-white mb-2">
-                  💼 Experiências Profissionais
+                <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                  <Briefcase size={16} className="text-gray-400" />
+                  Experiências Profissionais
                 </h3>
                 <p className="text-gray-500 text-xs mb-4">
                   Inclua projetos pessoais, freelas ou estágios. Se não tiver
@@ -271,8 +254,9 @@ export default function CVPage() {
 
               {/* Formação */}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-bold text-white mb-4">
-                  🎓 Formação Acadêmica
+                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                  <GraduationCap size={16} className="text-gray-400" />
+                  Formação Acadêmica
                 </h3>
                 <textarea
                   name="formacao"
@@ -287,8 +271,9 @@ export default function CVPage() {
 
               {/* Habilidades */}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-bold text-white mb-4">
-                  ⚡ Habilidades Técnicas
+                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                  <Zap size={16} className="text-gray-400" />
+                  Habilidades Técnicas
                 </h3>
                 <textarea
                   name="habilidades"
@@ -301,14 +286,29 @@ export default function CVPage() {
                 />
               </div>
 
+              {erro && (
+                <div className="bg-red-500/10 border border-red-800 rounded-xl p-4 text-sm text-red-300 flex gap-2.5">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  {erro}
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition"
+                className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition flex items-center justify-center gap-2"
               >
-                {loading
-                  ? "⏳ Gerando seu CV com IA..."
-                  : "✨ Gerar CV Otimizado →"}
+                {loading ? (
+                  <>
+                    <Loader2 size={17} className="animate-spin" />
+                    Gerando seu CV com IA...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={17} />
+                    Gerar CV Otimizado
+                  </>
+                )}
               </button>
             </form>
           </div>
@@ -318,7 +318,10 @@ export default function CVPage() {
           <div>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-white">✅ CV Gerado!</h2>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
+                  <CheckCircle2 size={24} className="text-orange-400" />
+                  CV Gerado!
+                </h2>
                 <p className="text-gray-400 mt-1">
                   Seu currículo foi otimizado para ATS.
                 </p>
@@ -326,15 +329,17 @@ export default function CVPage() {
               <div className="flex gap-3">
                 <button
                   onClick={copiarCV}
-                  className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition"
+                  className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2"
                 >
-                  📋 Copiar
+                  <Copy size={14} />
+                  Copiar
                 </button>
                 <button
                   onClick={() => setEtapa("formulario")}
-                  className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition"
+                  className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2"
                 >
-                  ✏️ Editar dados
+                  <Pencil size={14} />
+                  Editar dados
                 </button>
               </div>
             </div>
@@ -348,9 +353,10 @@ export default function CVPage() {
             <div className="mt-6 flex gap-4">
               <button
                 onClick={copiarCV}
-                className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-xl transition"
+                className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2"
               >
-                📋 Copiar CV completo
+                <Copy size={16} />
+                Copiar CV completo
               </button>
               <a
                 href="/dashboard"
