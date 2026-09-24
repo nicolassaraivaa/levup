@@ -1,108 +1,110 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import type { Profile, AnaliseAuditoria, AnaliseCV, ObjetivoAnalise } from "@/lib/types";
+import type { Profile, ObjetivoAnalise, AnaliseLinkedIn, SecaoAnaliseLinkedIn } from "@/lib/types";
 import Sidebar from "@/components/Sidebar";
-import AuditModal from "@/components/AuditModal";
 import ObjetivoSelect from "@/components/ObjetivoSelect";
 import LinkedInIcon from "@/components/icons/LinkedInIcon";
-import GitHubIcon from "@/components/icons/GitHubIcon";
+import type { ReactNode } from "react";
 import {
-  SearchCheck,
   FileText,
+  Image as ImageIcon,
+  Paperclip,
+  UploadCloud,
+  X,
   Loader2,
-  ChevronDown,
-  CheckCircle2,
-  AlertTriangle,
-  Lightbulb,
-  KeyRound,
+  AlertCircle,
 } from "lucide-react";
 
-type FonteId = "linkedin" | "github" | "cv";
+type Modo = "texto" | "imagem" | "pdf";
+type AbaId =
+  | "resumo"
+  | "experiencia"
+  | "habilidades"
+  | "educacao"
+  | "melhorias"
+  | "acoes";
 
-interface FonteState {
-  status: "idle" | "loading" | "done";
-  modalAberto: boolean;
-  objetivo: ObjetivoAnalise | "";
-  input: string;
-  resultado: (AnaliseAuditoria & Partial<AnaliseCV>) | null;
-  erro: string;
-  detalhesAbertos: boolean;
+const MODOS: { id: Modo; label: string; icon: typeof FileText }[] = [
+  { id: "texto", label: "Colar texto", icon: FileText },
+  { id: "imagem", label: "Enviar imagem", icon: ImageIcon },
+  { id: "pdf", label: "Enviar PDF", icon: Paperclip },
+];
+
+const ABAS: { id: AbaId; label: string }[] = [
+  { id: "resumo", label: "Resumo" },
+  { id: "experiencia", label: "Experiência" },
+  { id: "habilidades", label: "Habilidades" },
+  { id: "educacao", label: "Educação" },
+  { id: "melhorias", label: "Melhorias" },
+  { id: "acoes", label: "Ações" },
+];
+
+const MAX_HISTORICO = 5;
+
+const LIMITE_MB: Record<"imagem" | "pdf", number> = { imagem: 5, pdf: 15 };
+
+function lerArquivoBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const resultado = reader.result as string;
+      resolve(resultado.split(",")[1] ?? "");
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
-const estadoInicial: FonteState = {
-  status: "idle",
-  modalAberto: false,
-  objetivo: "",
-  input: "",
-  resultado: null,
-  erro: "",
-  detalhesAbertos: false,
-};
+interface ArquivoSelecionado {
+  base64: string;
+  mediaType: string;
+  nome: string;
+  previewUrl?: string;
+}
 
-const FONTES: Record<
-  FonteId,
-  {
-    titulo: string;
-    tituloModal: string;
-    descricaoCard: string;
-    descricaoModal: string;
-    iconBg: string;
-    accentText: string;
-    campoLabel: string;
-    campoHelper: string;
-    placeholder: string;
-  }
-> = {
-  linkedin: {
-    titulo: "LinkedIn",
-    tituloModal: "Análise de Perfil LinkedIn",
-    descricaoCard: "Análise do seu perfil público do LinkedIn",
-    descricaoModal:
-      "Selecione seu objetivo e insira a URL do perfil para que o Agente LinkedIn possa fazer uma análise personalizada.",
-    iconBg: "bg-blue-500/10 text-blue-400",
-    accentText: "text-blue-400",
-    campoLabel: "URL do Perfil",
-    campoHelper: "Cole a URL completa do seu perfil do LinkedIn",
-    placeholder: "https://linkedin.com/in/seu-perfil",
-  },
-  github: {
-    titulo: "GitHub",
-    tituloModal: "Análise de Perfil GitHub",
-    descricaoCard: "Análise dos seus repositórios e atividade",
-    descricaoModal:
-      "Selecione seu objetivo e insira a URL do seu perfil para que o Agente GitHub possa fazer uma análise personalizada.",
-    iconBg: "bg-purple-500/10 text-purple-400",
-    accentText: "text-purple-400",
-    campoLabel: "URL do Perfil",
-    campoHelper: "Cole a URL completa do seu perfil do GitHub",
-    placeholder: "https://github.com/seu-usuario",
-  },
-  cv: {
-    titulo: "Currículo",
-    tituloModal: "Análise de Currículo",
-    descricaoCard: "Análise de compatibilidade com sistemas ATS",
-    descricaoModal:
-      "Selecione seu objetivo e cole o texto do seu currículo para que o Agente de CV possa fazer uma análise personalizada.",
-    iconBg: "bg-orange-500/10 text-orange-400",
-    accentText: "text-orange-400",
-    campoLabel: "Texto do Currículo",
-    campoHelper: "Cole o texto completo do seu currículo",
-    placeholder: "Cole aqui o texto completo do seu currículo...",
-  },
-};
+interface HistoricoAuditoria {
+  id: string;
+  score: number | null;
+  created_at?: string;
+  report: AnaliseLinkedIn;
+}
+
+function formatarData(iso?: string) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
 
 export default function AuditoriaPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [estados, setEstados] = useState<Record<FonteId, FonteState>>({
-    linkedin: { ...estadoInicial },
-    github: { ...estadoInicial },
-    cv: { ...estadoInicial },
-  });
+  const [objetivo, setObjetivo] = useState<ObjetivoAnalise | "">("");
+  const [modo, setModo] = useState<Modo>("texto");
+  const [texto, setTexto] = useState("");
+  const [arquivo, setArquivo] = useState<ArquivoSelecionado | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [resultado, setResultado] = useState<AnaliseLinkedIn | null>(null);
+  const [erro, setErro] = useState("");
+  const [aba, setAba] = useState<AbaId>("resumo");
+  const [historico, setHistorico] = useState<HistoricoAuditoria[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  async function carregarHistorico(userId: string) {
+    const { data } = await supabase
+      .from("profile_audits")
+      .select("id, score, created_at, report")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(MAX_HISTORICO);
+    setHistorico((data ?? []) as HistoricoAuditoria[]);
+  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -119,36 +121,61 @@ export default function AuditoriaPage() {
         .eq("id", user.id)
         .single();
       setProfile(data);
+      carregarHistorico(user.id);
     }
     loadProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function atualizar(fonte: FonteId, patch: Partial<FonteState>) {
-    setEstados((prev) => ({ ...prev, [fonte]: { ...prev[fonte], ...patch } }));
+  function removerArquivo() {
+    if (arquivo?.previewUrl) URL.revokeObjectURL(arquivo.previewUrl);
+    setArquivo(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function abrirModal(fonte: FonteId) {
-    atualizar(fonte, { modalAberto: true, erro: "" });
+  function trocarModo(novoModo: Modo) {
+    setModo(novoModo);
+    setErro("");
+    removerArquivo();
   }
 
-  function fecharModal(fonte: FonteId) {
-    atualizar(fonte, { modalAberto: false, erro: "" });
+  async function handleArquivoSelecionado(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || modo === "texto") return;
+    setErro("");
+
+    const limiteMb = LIMITE_MB[modo];
+    if (file.size > limiteMb * 1024 * 1024) {
+      setErro(`Arquivo muito grande. O limite é ${limiteMb}MB.`);
+      return;
+    }
+
+    const base64 = await lerArquivoBase64(file);
+    setArquivo({
+      base64,
+      mediaType: file.type,
+      nome: file.name,
+      previewUrl: modo === "imagem" ? URL.createObjectURL(file) : undefined,
+    });
   }
 
-  async function analisar(fonte: FonteId) {
-    const estado = estados[fonte];
-    if (!estado.objetivo || !estado.input.trim()) return;
+  async function analisar() {
+    if (!objetivo) return;
+    if (modo === "texto" && !texto.trim()) return;
+    if (modo !== "texto" && !arquivo) return;
 
-    atualizar(fonte, { status: "loading", erro: "" });
+    setStatus("loading");
+    setErro("");
 
     try {
-      const body =
-        fonte === "cv"
-          ? { objetivo: estado.objetivo, texto: estado.input }
-          : { objetivo: estado.objetivo, url: estado.input };
+      const body: Record<string, unknown> = { objetivo, modo };
+      if (modo === "texto") {
+        body.texto = texto;
+      } else {
+        body.arquivo = { base64: arquivo!.base64, mediaType: arquivo!.mediaType };
+      }
 
-      const res = await fetch(`/api/auditoria/${fonte}`, {
+      const res = await fetch("/api/auditoria/linkedin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -158,316 +185,530 @@ export default function AuditoriaPage() {
         throw new Error(data.error || "Não foi possível concluir a análise.");
       }
 
-      atualizar(fonte, {
-        status: "done",
-        resultado: data.analise,
-        modalAberto: false,
-        detalhesAbertos: true,
-      });
+      setResultado(data.analise);
+      setStatus("done");
+      setAba("resumo");
 
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
+        const { data: existentes } = await supabase
+          .from("profile_audits")
+          .select("id, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true });
+
+        if (existentes && existentes.length >= MAX_HISTORICO) {
+          const idsParaExcluir = existentes
+            .slice(0, existentes.length - (MAX_HISTORICO - 1))
+            .map((r) => r.id);
+          if (idsParaExcluir.length > 0) {
+            await supabase.from("profile_audits").delete().in("id", idsParaExcluir);
+          }
+        }
+
         await supabase.from("profile_audits").insert({
           user_id: user.id,
-          linkedin_url: fonte === "linkedin" ? estado.input : null,
-          github_url: fonte === "github" ? estado.input : null,
-          cv_text: fonte === "cv" ? estado.input : null,
+          linkedin_url: null,
+          github_url: null,
+          cv_text: null,
           report: data.analise,
           score: data.analise.score,
         });
+
+        carregarHistorico(user.id);
       }
     } catch (err) {
-      atualizar(fonte, {
-        status: "idle",
-        erro: err instanceof Error ? err.message : "Erro inesperado.",
-      });
+      setStatus("idle");
+      setErro(err instanceof Error ? err.message : "Erro inesperado.");
     }
   }
 
+  function reiniciar() {
+    setStatus("idle");
+    setResultado(null);
+    setObjetivo("");
+    setTexto("");
+    removerArquivo();
+    setModo("texto");
+    setAba("resumo");
+    setErro("");
+  }
+
+  function verHistorico(item: HistoricoAuditoria) {
+    setResultado(item.report);
+    setStatus("done");
+    setAba("resumo");
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-background text-ink">
       <Sidebar active="/auditoria" profile={profile} />
 
-      <div className="ml-64 p-8 max-w-3xl">
+      <div className="ml-64 p-8 max-w-4xl">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
-            <SearchCheck size={24} className="text-blue-400" />
-            Auditoria de Perfil
+          <h2 className="text-2xl font-bold text-ink flex items-center gap-2.5">
+            <LinkedInIcon size={22} />
+            Auditoria de LinkedIn
           </h2>
-          <p className="text-gray-400 mt-2">
-            Analise cada parte do seu perfil profissional individualmente e
-            receba score e recomendações direcionadas ao seu objetivo.
+          <p className="text-ink-muted mt-2">
+            Envie seu perfil — texto, uma captura de tela ou o PDF exportado
+            — e receba uma auditoria completa de uma recrutadora
+            especializada em IA.
           </p>
         </div>
 
-        <div className="space-y-5">
-          {(Object.keys(FONTES) as FonteId[]).map((fonte) => (
-            <CardFonte
-              key={fonte}
-              fonte={fonte}
-              estado={estados[fonte]}
-              onAbrirModal={() => abrirModal(fonte)}
-              onToggleDetalhes={() =>
-                atualizar(fonte, {
-                  detalhesAbertos: !estados[fonte].detalhesAbertos,
-                })
-              }
-            />
-          ))}
-        </div>
-      </div>
+        {erro && (
+          <div className="mb-6 bg-rust-wash border border-rust/30 rounded-xl p-4 text-sm text-rust flex gap-2.5">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            {erro}
+          </div>
+        )}
 
-      {(Object.keys(FONTES) as FonteId[]).map((fonte) => {
-        const config = FONTES[fonte];
-        const estado = estados[fonte];
-        return (
-          <AuditModal
-            key={fonte}
-            open={estado.modalAberto}
-            onClose={() => fecharModal(fonte)}
-            icon={
-              fonte === "linkedin" ? (
-                <LinkedInIcon size={20} />
-              ) : fonte === "github" ? (
-                <GitHubIcon size={20} />
-              ) : (
-                <FileText size={20} />
-              )
-            }
-            iconBg={config.iconBg}
-            title={config.tituloModal}
-            description={config.descricaoModal}
-            onSubmit={() => analisar(fonte)}
-            submitLabel="Iniciar Análise"
-            submitDisabled={!estado.objetivo || !estado.input.trim()}
-            loading={estado.status === "loading"}
-            erro={estado.erro}
-          >
+        {status !== "done" ? (
+          <div className="bg-surface border border-hairline rounded-2xl p-6 space-y-6">
             <div>
-              <label className="text-sm font-medium text-white mb-2 block">
+              <label className="text-sm font-medium text-ink mb-2 block">
                 Objetivo da Análise
               </label>
-              <ObjetivoSelect
-                value={estado.objetivo}
-                onChange={(v) => atualizar(fonte, { objetivo: v })}
-              />
-              <p className="text-gray-500 text-xs mt-1.5">
+              <ObjetivoSelect value={objetivo} onChange={setObjetivo} />
+              <p className="text-ink-faint text-xs mt-1.5">
                 Escolha o objetivo para uma análise personalizada
               </p>
             </div>
 
             <div>
-              <label className="text-sm font-medium text-white mb-2 block">
-                {config.campoLabel}
+              <label className="text-sm font-medium text-ink mb-2 block">
+                Seu perfil do LinkedIn
               </label>
-              {fonte === "cv" ? (
+
+              <div className="flex flex-wrap gap-2 mb-3">
+                {MODOS.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => trocarModo(m.id)}
+                    className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium border transition ${
+                      modo === m.id
+                        ? "border-brass bg-brass-wash text-brass-strong"
+                        : "border-hairline-strong text-ink-muted hover:border-ink-faint"
+                    }`}
+                  >
+                    <m.icon size={14} />
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {modo === "texto" ? (
                 <textarea
-                  value={estado.input}
-                  onChange={(e) =>
-                    atualizar(fonte, { input: e.target.value })
-                  }
-                  rows={6}
-                  className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition resize-none text-sm"
-                  placeholder={config.placeholder}
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  rows={8}
+                  placeholder="Cole aqui a headline, o 'Sobre', experiências, formação e habilidades do seu perfil..."
+                  className="w-full bg-background border border-hairline-strong rounded-lg px-4 py-3 text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition resize-none text-sm"
                 />
-              ) : (
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
-                    {fonte === "linkedin" ? (
-                      <LinkedInIcon size={16} />
-                    ) : (
-                      <GitHubIcon size={16} />
-                    )}
+              ) : !arquivo ? (
+                <label className="flex flex-col items-center justify-center gap-2 border border-dashed border-hairline-strong rounded-xl py-10 cursor-pointer hover:border-brass transition text-ink-faint">
+                  <UploadCloud size={22} />
+                  <span className="text-sm text-center px-4">
+                    {modo === "imagem"
+                      ? `Clique para enviar uma captura de tela do seu perfil (JPEG, PNG, WEBP — até ${LIMITE_MB.imagem}MB)`
+                      : `Clique para enviar o PDF exportado do seu perfil pelo LinkedIn (até ${LIMITE_MB.pdf}MB)`}
                   </span>
                   <input
-                    type="text"
-                    value={estado.input}
-                    onChange={(e) =>
-                      atualizar(fonte, { input: e.target.value })
-                    }
-                    className="w-full bg-black border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition text-sm"
-                    placeholder={config.placeholder}
+                    ref={fileInputRef}
+                    type="file"
+                    accept={modo === "imagem" ? "image/*" : "application/pdf"}
+                    className="hidden"
+                    onChange={handleArquivoSelecionado}
                   />
+                </label>
+              ) : (
+                <div className="flex items-center gap-3 border border-hairline-strong rounded-xl p-4">
+                  {modo === "imagem" && arquivo.previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={arquivo.previewUrl}
+                      alt=""
+                      className="w-14 h-14 object-cover rounded-lg shrink-0"
+                    />
+                  ) : (
+                    <FileText size={28} className="text-brass shrink-0" />
+                  )}
+                  <span className="text-sm text-ink flex-1 truncate">
+                    {arquivo.nome}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={removerArquivo}
+                    className="text-ink-faint hover:text-ink transition shrink-0"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               )}
-              <p className="text-gray-500 text-xs mt-1.5">
-                {config.campoHelper}
+              <p className="text-ink-faint text-xs mt-1.5">
+                Quanto mais completo o conteúdo enviado, mais precisa é a
+                análise.
               </p>
             </div>
-          </AuditModal>
-        );
-      })}
+
+            <button
+              onClick={analisar}
+              disabled={
+                status === "loading" ||
+                !objetivo ||
+                (modo === "texto" ? !texto.trim() : !arquivo)
+              }
+              className="w-full bg-brass hover:bg-brass-strong disabled:opacity-50 text-background font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2"
+            >
+              {status === "loading" ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Analisando...
+                </>
+              ) : (
+                "Iniciar Análise"
+              )}
+            </button>
+          </div>
+        ) : null}
+
+        {status !== "done" && historico.length > 0 && (
+          <div className="mt-6 bg-surface border border-hairline rounded-2xl p-6">
+            <h3 className="font-bold text-ink mb-1">
+              Histórico de análises
+            </h3>
+            <p className="text-ink-faint text-xs mb-4">
+              As {MAX_HISTORICO} análises mais recentes ficam salvas aqui.
+            </p>
+            <div className="divide-y divide-hairline">
+              {historico.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => verHistorico(item)}
+                  className="w-full flex items-center gap-4 py-3 text-left hover:bg-surface-raised -mx-2 px-2 rounded-lg transition"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-brass-wash text-brass shrink-0">
+                    <LinkedInIcon size={16} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-ink truncate">
+                      {item.report?.nome || "Perfil analisado"}
+                    </span>
+                    <span className="block text-xs text-ink-faint">
+                      {formatarData(item.created_at)}
+                    </span>
+                  </span>
+                  <span className="font-mono text-sm text-brass shrink-0">
+                    {item.score ?? "—"}
+                    <span className="text-ink-faint">/100</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {status === "done" && resultado && (
+          <ResultadoAuditoria
+            resultado={resultado}
+            aba={aba}
+            setAba={setAba}
+            onReiniciar={reiniciar}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-function CardFonte({
-  fonte,
-  estado,
-  onAbrirModal,
-  onToggleDetalhes,
+function ResultadoAuditoria({
+  resultado,
+  aba,
+  setAba,
+  onReiniciar,
 }: {
-  fonte: FonteId;
-  estado: FonteState;
-  onAbrirModal: () => void;
-  onToggleDetalhes: () => void;
+  resultado: AnaliseLinkedIn;
+  aba: AbaId;
+  setAba: (a: AbaId) => void;
+  onReiniciar: () => void;
 }) {
-  const config = FONTES[fonte];
-  const resultado = estado.resultado;
-
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div
-            className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${config.iconBg}`}
-          >
-            {fonte === "linkedin" ? (
+    <div>
+      <div className="bg-surface border border-hairline rounded-2xl p-6 mb-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3.5">
+            <span className="w-11 h-11 rounded-xl bg-brass-wash text-brass flex items-center justify-center shrink-0">
               <LinkedInIcon size={20} />
-            ) : fonte === "github" ? (
-              <GitHubIcon size={20} />
-            ) : (
-              <FileText size={20} />
-            )}
+            </span>
+            <div>
+              <h3 className="font-bold text-ink">
+                {resultado.nome || "Perfil analisado"}
+              </h3>
+              <p className="text-ink-faint text-xs mt-0.5">
+                {resultado.headline}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-white">{config.titulo}</h3>
-            <p className="text-gray-500 text-xs mt-0.5">
-              {config.descricaoCard}
-            </p>
-          </div>
-        </div>
-
-        {resultado && (
-          <div className="text-right shrink-0">
-            <span className={`text-2xl font-black ${config.accentText}`}>
+          <div className="text-right shrink-0 font-mono">
+            <span className="text-2xl font-semibold text-brass">
               {resultado.score}
             </span>
-            <span className="text-gray-500 text-sm">/100</span>
+            <span className="text-ink-faint text-sm">/100</span>
           </div>
-        )}
+        </div>
+        <p className="text-ink-muted text-sm leading-relaxed mt-4">
+          {resultado.resumo}
+        </p>
+        <button
+          onClick={onReiniciar}
+          className="mt-4 text-sm text-ink-faint hover:text-ink transition"
+        >
+          Nova análise
+        </button>
       </div>
 
-      {!resultado ? (
-        <button
-          onClick={onAbrirModal}
-          disabled={estado.status === "loading"}
-          className="mt-5 w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition flex items-center justify-center gap-2"
-        >
-          {estado.status === "loading" ? (
-            <>
-              <Loader2 size={15} className="animate-spin" />
-              Analisando...
-            </>
-          ) : (
-            "Analisar perfil"
-          )}
-        </button>
-      ) : (
-        <div className="mt-5 pt-5 border-t border-gray-800">
-          <p className="text-gray-300 text-sm leading-relaxed">
-            {resultado.resumo}
-          </p>
+      <div className="flex gap-1 overflow-x-auto mb-6 border-b border-hairline">
+        {ABAS.map((a) => (
+          <button
+            key={a.id}
+            onClick={() => setAba(a.id)}
+            className={`shrink-0 px-4 py-2.5 text-sm font-medium border-b-2 transition ${
+              aba === a.id
+                ? "border-brass text-brass"
+                : "border-transparent text-ink-faint hover:text-ink"
+            }`}
+          >
+            {a.label}
+          </button>
+        ))}
+      </div>
 
-          <div className="flex items-center gap-4 mt-4">
-            <button
-              onClick={onToggleDetalhes}
-              className="text-sm text-gray-400 hover:text-white transition flex items-center gap-1.5"
-            >
-              {estado.detalhesAbertos ? "Ocultar detalhes" : "Ver detalhes"}
-              <ChevronDown
-                size={14}
-                className={`transition-transform ${estado.detalhesAbertos ? "rotate-180" : ""}`}
-              />
-            </button>
-            <button
-              onClick={onAbrirModal}
-              className="text-sm text-gray-500 hover:text-white transition"
-            >
-              Analisar novamente
-            </button>
-          </div>
-
-          {estado.detalhesAbertos && (
-            <div className="mt-5 space-y-4">
-              {typeof resultado.ats_score === "number" && (
-                <div className="flex items-center justify-between bg-gray-800/50 rounded-lg px-4 py-2.5">
-                  <span className="text-gray-400 text-sm">
-                    Compatibilidade ATS
-                  </span>
-                  <span className="text-white font-bold text-sm">
-                    {resultado.ats_score}/100
-                  </span>
-                </div>
-              )}
-
-              <div>
-                <h4 className="text-green-400 font-medium text-sm mb-2 flex items-center gap-2">
-                  <CheckCircle2 size={15} />
-                  Pontos Fortes
-                </h4>
-                <ul className="space-y-1">
-                  {resultado.pontos_fortes?.map((p, i) => (
-                    <li key={i} className="text-gray-300 text-sm flex gap-2">
-                      <span className="text-green-400">▸</span> {p}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-red-400 font-medium text-sm mb-2 flex items-center gap-2">
-                  <AlertTriangle size={15} />
-                  Gaps
-                </h4>
-                <ul className="space-y-1">
-                  {resultado.gaps?.map((g, i) => (
-                    <li key={i} className="text-gray-300 text-sm flex gap-2">
-                      <span className="text-red-400">▸</span> {g}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {resultado.palavras_chave_faltando &&
-                resultado.palavras_chave_faltando.length > 0 && (
-                  <div>
-                    <h4 className="text-orange-400 font-medium text-sm mb-2 flex items-center gap-2">
-                      <KeyRound size={15} />
-                      Palavras-chave Faltando
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {resultado.palavras_chave_faltando.map((p, i) => (
-                        <span
-                          key={i}
-                          className="bg-orange-600/20 border border-orange-700 text-orange-300 px-3 py-1 rounded-full text-xs"
-                        >
-                          {p}
-                        </span>
-                      ))}
-                    </div>
+      {aba === "resumo" && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {(["experiencia", "habilidades", "educacao"] as const).map((chave) => {
+            const secao = resultado[chave];
+            return (
+              <button
+                key={chave}
+                onClick={() => setAba(chave)}
+                className="bg-surface border border-hairline rounded-xl p-4 text-left hover:border-hairline-strong transition"
+              >
+                <p className="text-ink-faint text-xs font-mono uppercase tracking-wide">
+                  {ABAS.find((a) => a.id === chave)?.label}
+                </p>
+                <p className="text-xl font-mono font-semibold text-ink mt-1">
+                  {secao.score ?? "—"}
+                  {secao.score !== null && (
+                    <span className="text-ink-faint text-sm">/100</span>
+                  )}
+                </p>
+                {secao.score !== null && (
+                  <div className="w-full bg-surface-raised rounded-full h-1.5 mt-2">
+                    <div
+                      className="bg-brass h-1.5 rounded-full"
+                      style={{ width: `${secao.score}%` }}
+                    />
                   </div>
                 )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-              <div>
-                <h4 className={`font-medium text-sm mb-2 flex items-center gap-2 ${config.accentText}`}>
-                  <Lightbulb size={15} />
-                  Sugestões
-                </h4>
-                <ul className="space-y-1">
-                  {resultado.sugestoes?.map((s, i) => (
-                    <li key={i} className="text-gray-300 text-sm flex gap-2">
-                      <span className={config.accentText}>{i + 1}.</span> {s}
-                    </li>
-                  ))}
-                </ul>
+      {aba === "experiencia" && (
+        <SecaoDetalhe titulo="Experiência" secao={resultado.experiencia}>
+          {resultado.experiencia.destaques?.length > 0 && (
+            <div className="mt-5">
+              <h4 className="text-sm font-semibold text-ink mb-2">
+                Destaques
+              </h4>
+              <ul className="space-y-2">
+                {resultado.experiencia.destaques.map((d, i) => (
+                  <li key={i} className="text-ink-muted text-sm flex gap-2">
+                    <span className="text-sage shrink-0">↗</span>
+                    {d}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </SecaoDetalhe>
+      )}
+
+      {aba === "habilidades" && (
+        <SecaoDetalhe titulo="Habilidades" secao={resultado.habilidades}>
+          {resultado.habilidades.sugeridas?.length > 0 && (
+            <div className="mt-5">
+              <h4 className="text-sm font-semibold text-ink mb-2">
+                Habilidades Sugeridas
+              </h4>
+              <div className="space-y-2">
+                {resultado.habilidades.sugeridas.map((h, i) => (
+                  <div
+                    key={i}
+                    className="bg-brass-wash border border-brass/30 rounded-lg px-4 py-2.5"
+                  >
+                    <span className="text-sm font-semibold text-brass-strong">
+                      {h.nome}:{" "}
+                    </span>
+                    <span className="text-sm text-ink-muted">
+                      {h.descricao}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
+        </SecaoDetalhe>
+      )}
+
+      {aba === "educacao" && (
+        <SecaoDetalhe titulo="Educação" secao={resultado.educacao} />
+      )}
+
+      {aba === "melhorias" && (
+        <div className="space-y-5">
+          {resultado.melhorias.map((m, i) => (
+            <div
+              key={i}
+              className="bg-surface border border-hairline rounded-2xl p-6"
+            >
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <h3 className="font-bold text-ink">{m.titulo}</h3>
+                <div className="flex gap-2 shrink-0">
+                  <span
+                    className={`text-xs font-mono px-2.5 py-1 rounded-full border ${
+                      m.prioridade === "alta"
+                        ? "border-rust/40 bg-rust-wash text-rust"
+                        : m.prioridade === "média"
+                          ? "border-brass/40 bg-brass-wash text-brass-strong"
+                          : "border-hairline-strong text-ink-faint"
+                    }`}
+                  >
+                    prioridade {m.prioridade}
+                  </span>
+                  <span className="text-xs font-mono px-2.5 py-1 rounded-full border border-hairline-strong text-ink-faint">
+                    {m.esforco}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <p>
+                  <span className="font-semibold text-ink">Problema: </span>
+                  <span className="text-ink-muted">{m.problema}</span>
+                </p>
+                <p>
+                  <span className="font-semibold text-ink">Solução: </span>
+                  <span className="text-ink-muted">{m.solucao}</span>
+                </p>
+              </div>
+
+              <div className="bg-surface-raised border border-hairline-strong rounded-lg px-4 py-3 mt-4">
+                <p className="text-xs font-mono uppercase tracking-wide text-ink-faint mb-1">
+                  Impacto esperado
+                </p>
+                <p className="text-sm text-ink-muted">{m.impacto_esperado}</p>
+              </div>
+
+              {m.exemplos?.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {m.exemplos.map((ex, j) => (
+                    <div key={j} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="bg-rust-wash border border-rust/30 rounded-lg p-3">
+                        <p className="text-xs font-mono uppercase text-rust mb-1">
+                          Antes
+                        </p>
+                        <p className="text-sm text-ink-muted">{ex.antes}</p>
+                      </div>
+                      <div className="bg-sage-wash border border-sage/30 rounded-lg p-3">
+                        <p className="text-xs font-mono uppercase text-sage mb-1">
+                          Depois
+                        </p>
+                        <p className="text-sm text-ink-muted">{ex.depois}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {m.passo_a_passo?.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-mono uppercase tracking-wide text-ink-faint mb-2">
+                    Passo a passo
+                  </p>
+                  <ol className="space-y-1.5">
+                    {m.passo_a_passo.map((p, k) => (
+                      <li key={k} className="text-sm text-ink-muted flex gap-2">
+                        <span className="text-brass font-mono shrink-0">
+                          {k + 1}.
+                        </span>
+                        {p}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
+
+      {aba === "acoes" && (
+        <div className="bg-surface border border-hairline rounded-2xl p-6">
+          <h3 className="font-bold text-ink mb-4">
+            Próximos Passos Recomendados
+          </h3>
+          <ul className="space-y-3">
+            {resultado.acoes.map((a, i) => (
+              <li key={i} className="flex gap-3 text-sm text-ink-muted">
+                <span className="font-mono text-brass shrink-0">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                {a}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SecaoDetalhe({
+  titulo,
+  secao,
+  children,
+}: {
+  titulo: string;
+  secao: SecaoAnaliseLinkedIn;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="bg-surface border border-hairline rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-ink">Análise de {titulo}</h3>
+        <span className="font-mono text-sm text-ink-muted">
+          {secao.score !== null ? `${secao.score}/100` : "—"}
+        </span>
+      </div>
+      {secao.score !== null && (
+        <div className="w-full bg-surface-raised rounded-full h-1.5 mb-4">
+          <div
+            className="bg-brass h-1.5 rounded-full"
+            style={{ width: `${secao.score}%` }}
+          />
+        </div>
+      )}
+      <p className="text-ink-muted text-sm leading-relaxed">
+        {secao.analise}
+      </p>
+      {children}
     </div>
   );
 }

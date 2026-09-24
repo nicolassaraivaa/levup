@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Engineering Release — navy-ink surfaces */
+  --background: #0d1017;
+  --surface: #171b24;
+  --surface-raised: #1d2230;
+  --hairline: #262b38;
+  --hairline-strong: #333a4a;
+
+  --ink: #eef0f4;
+  --ink-muted: #a2a8b8;
+  --ink-faint: #656d80;
+
+  /* single brand signal: brass/gold, earned not decorative */
+  --brass: #cb9b4c;
+  --brass-strong: #e0b569;
+  --brass-wash: rgba(203, 155, 76, 0.12);
+
+  /* status, used only for state — not a rainbow of feature accents */
+  --sage: #4fae8b;
+  --sage-wash: rgba(79, 174, 139, 0.12);
+  --rust: #c96a4f;
+  --rust-wash: rgba(201, 106, 79, 0.12);
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-brass: var(--brass);
+  --color-brass-strong: var(--brass-strong);
+  --color-brass-wash: var(--brass-wash);
+  --color-sage: var(--sage);
+  --color-sage-wash: var(--sage-wash);
+  --color-rust: var(--rust);
+  --color-rust-wash: var(--rust-wash);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--brass-wash);
+  color: var(--brass-strong);
 }

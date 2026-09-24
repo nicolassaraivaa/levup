@@ -1,64 +1,86 @@
 import { anthropic } from "@/lib/anthropic";
 import { NextRequest, NextResponse } from "next/server";
+import type { RespostaDiagnostico } from "@/lib/types";
+import { NIVEL_LABEL, type AreaDiagnostico, type NivelAlvo } from "@/lib/diagnostico";
 
 export async function POST(req: NextRequest) {
-  const { area, etapa, respostaUsuario, historico } = await req.json();
+  const { area, nivel, etapa, respostas, categoria } = (await req.json()) as {
+    area: AreaDiagnostico;
+    nivel: NivelAlvo;
+    etapa: "pergunta" | "resultado";
+    respostas: RespostaDiagnostico[];
+    categoria?: string;
+  };
+
+  const nivelLabel = NIVEL_LABEL[nivel] ?? "júnior";
 
   try {
-    // Etapa 1: gerar pergunta
     if (etapa === "pergunta") {
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-5",
-        max_tokens: 1024,
-        system: `Você é um avaliador técnico especializado em entrevistas para desenvolvedores júnior de ${area}.
+        max_tokens: 512,
+        system: `Você é um avaliador técnico especializado em ${area}, entrevistando candidatos para vagas de nível ${nivelLabel}.
 
-Sua função é gerar perguntas técnicas progressivas para avaliar o nível do candidato.
-Comece com perguntas básicas e aumente a dificuldade conforme as respostas.
+Sua tarefa é gerar UMA pergunta técnica sobre o tema: "${categoria}".
 
 Regras:
-- Gere UMA pergunta por vez
-- Seja direto e claro
-- Foque em conceitos práticos que um dev júnior deve saber
-- Responda APENAS com a pergunta, sem explicações adicionais`,
+- Calibre a dificuldade para o nível ${nivelLabel}: nem trivial demais, nem avançada demais para esse nível.
+- Foque em conceitos práticos do dia a dia de quem trabalha com "${categoria}".
+- Se esse tema já apareceu antes nesta sessão (veja o histórico), faça uma pergunta mais profunda ou um ângulo diferente do mesmo tema, nunca repita a mesma pergunta.
+- Seja direto e claro, uma única pergunta.
+- Responda APENAS com a pergunta, sem explicações, sem numeração, sem mencionar o nome do tema.`,
         messages: [
-          ...historico,
+          ...respostas
+            .map((r) => [
+              { role: "assistant" as const, content: r.pergunta },
+              { role: "user" as const, content: r.resposta },
+            ])
+            .flat(),
           {
             role: "user",
             content:
-              historico.length === 0
-                ? `Inicie o diagnóstico técnico de ${area}. Faça a primeira pergunta básica.`
-                : `O candidato respondeu: "${respostaUsuario}". Faça a próxima pergunta.`,
+              respostas.length === 0
+                ? `Inicie o diagnóstico técnico de ${area} para nível ${nivelLabel}. Faça a primeira pergunta sobre "${categoria}".`
+                : `Faça a próxima pergunta, sobre "${categoria}".`,
           },
         ],
       });
 
       const pergunta =
         message.content[0].type === "text" ? message.content[0].text : "";
-      return NextResponse.json({ pergunta });
+      return NextResponse.json({ pergunta, categoria });
     }
 
-    // Etapa 2: gerar resultado final
     if (etapa === "resultado") {
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-5",
-        max_tokens: 2048,
-        system: `Você é um avaliador técnico especializado em desenvolvedores júnior de ${area}.
+        max_tokens: 3072,
+        system: `Você é um avaliador técnico sênior especializado em ${area}, avaliando candidatos para vagas de nível ${nivelLabel}.
 
-Analise o histórico completo do diagnóstico e gere um relatório detalhado.
+Você recebeu um diagnóstico estruturado com ${respostas.length} perguntas. Algumas competências podem ter sido perguntadas mais de uma vez (isso acontece quando o candidato já mostrou fragilidade nesse tema em diagnósticos anteriores, e o sistema aprofunda a checagem). Avalie CADA resposta individualmente considerando o nível ${nivelLabel} como referência, e depois consolide o resultado geral.
 
 Responda APENAS em JSON válido com essa estrutura exata:
 {
-  "score": número de 0 a 100,
-  "nivel": "iniciante" | "básico" | "intermediário",
+  "score": número de 0 a 100 (média geral ponderada),
+  "nivel_percebido": "estágio" | "júnior" | "pleno" | "sênior" (nível real demonstrado nas respostas, independente do nível alvo buscado),
+  "categorias": [
+    { "categoria": "nome da competência", "score": número de 0 a 100, "comentario": "uma frase objetiva sobre o desempenho nessa competência" }
+  ] (uma entrada para cada competência DISTINTA perguntada; se uma competência apareceu mais de uma vez, consolide em uma única entrada com a média das notas e um comentário que reflita as duas respostas),
   "pontos_fortes": ["ponto 1", "ponto 2", "ponto 3"],
   "gaps": ["gap 1", "gap 2", "gap 3"],
   "recomendacoes": ["recomendação 1", "recomendação 2", "recomendação 3"],
-  "resumo": "parágrafo resumindo o desempenho do candidato"
+  "proxima_acao": "uma frase recomendando o próximo passo concreto do candidato dentro da plataforma (ex: praticar entrevista, revisar tema X)",
+  "resumo": "parágrafo resumindo o desempenho do candidato, mencionando se o nível percebido está alinhado ao nível alvo (${nivelLabel})"
 }`,
         messages: [
           {
             role: "user",
-            content: `Histórico do diagnóstico de ${area}:\n\n${JSON.stringify(historico, null, 2)}\n\nGere o relatório final.`,
+            content: `Diagnóstico de ${area} — nível alvo: ${nivelLabel}\n\n${respostas
+              .map(
+                (r, i) =>
+                  `${i + 1}. [${r.categoria}]\nPergunta: ${r.pergunta}\nResposta do candidato: ${r.resposta}`,
+              )
+              .join("\n\n")}\n\nGere o relatório final.`,
           },
         ],
       });

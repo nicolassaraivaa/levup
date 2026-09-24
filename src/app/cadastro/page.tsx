@@ -4,6 +4,16 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  User,
+  Mail,
+  Lock,
+  Compass,
+  ChevronDown,
+  ArrowRight,
+  AlertCircle,
+} from "lucide-react";
+import AuthShell from "@/components/AuthShell";
 
 export default function CadastroPage() {
   const [name, setName] = useState("");
@@ -42,96 +52,126 @@ export default function CadastroPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-black text-white">Levup</h1>
-          <p className="text-gray-400 mt-2">Crie sua conta e comece agora</p>
+    <AuthShell>
+      <span className="font-mono text-xs uppercase tracking-wide text-ink-faint">
+        primeiro commit
+      </span>
+      <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">
+        Crie sua conta
+      </h1>
+      <p className="mt-2 text-sm text-ink-muted">
+        Leva menos de um minuto. Sem cartão de crédito.
+      </p>
+
+      <form onSubmit={handleCadastro} className="mt-8 space-y-4">
+        <div>
+          <label className="text-sm text-ink-muted mb-1.5 block">
+            Nome completo
+          </label>
+          <div className="relative">
+            <User
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+            />
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Seu nome"
+              required
+              className="w-full bg-surface border border-hairline-strong rounded-md pl-10 pr-4 py-3 text-sm text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition"
+            />
+          </div>
         </div>
 
-        <div className="bg-gray-900 rounded-2xl p-8 border border-gray-800">
-          <h2 className="text-xl font-bold text-white mb-6">Criar conta</h2>
-
-          <form onSubmit={handleCadastro} className="space-y-4">
-            <div>
-              <label className="text-sm text-gray-400 mb-1 block">
-                Nome completo
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Seu nome"
-                required
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-400 mb-1 block">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                required
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-400 mb-1 block">Senha</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-400 mb-1 block">
-                Área de interesse
-              </label>
-              <select
-                value={area}
-                onChange={(e) => setArea(e.target.value)}
-                required
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition"
-              >
-                <option value="">Selecione sua área</option>
-                <option value="frontend">Frontend</option>
-                <option value="backend">Backend</option>
-                <option value="fullstack">Full Stack</option>
-                <option value="mobile">Mobile</option>
-                <option value="dados">Dados</option>
-              </select>
-            </div>
-
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition"
-            >
-              {loading ? "Criando conta..." : "Criar conta"}
-            </button>
-          </form>
-
-          <p className="text-center text-gray-500 text-sm mt-6">
-            Já tem conta?{" "}
-            <Link
-              href="/login"
-              className="text-indigo-400 hover:text-indigo-300"
-            >
-              Entrar
-            </Link>
-          </p>
+        <div>
+          <label className="text-sm text-ink-muted mb-1.5 block">Email</label>
+          <div className="relative">
+            <Mail
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+            />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+              required
+              className="w-full bg-surface border border-hairline-strong rounded-md pl-10 pr-4 py-3 text-sm text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition"
+            />
+          </div>
         </div>
-      </div>
-    </div>
+
+        <div>
+          <label className="text-sm text-ink-muted mb-1.5 block">Senha</label>
+          <div className="relative">
+            <Lock
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              className="w-full bg-surface border border-hairline-strong rounded-md pl-10 pr-4 py-3 text-sm text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm text-ink-muted mb-1.5 block">
+            Área de interesse
+          </label>
+          <div className="relative">
+            <Compass
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+            />
+            <select
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+              required
+              className="w-full appearance-none bg-surface border border-hairline-strong rounded-md pl-10 pr-4 py-3 text-sm text-ink focus:outline-none focus:border-brass transition"
+            >
+              <option value="">Selecione sua área</option>
+              <option value="frontend">Frontend</option>
+              <option value="backend">Backend</option>
+              <option value="fullstack">Full Stack</option>
+              <option value="mobile">Mobile</option>
+              <option value="dados">Dados</option>
+            </select>
+            <ChevronDown
+              size={16}
+              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 rounded-md border border-rust/30 bg-rust-wash px-3.5 py-2.5 text-sm text-rust">
+            <AlertCircle size={15} className="shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-brass py-3 text-sm font-semibold text-background transition hover:bg-brass-strong disabled:opacity-50"
+        >
+          {loading ? "Criando conta..." : "Criar conta"}
+          {!loading && <ArrowRight size={16} />}
+        </button>
+      </form>
+
+      <p className="mt-8 border-t border-hairline pt-6 text-sm text-ink-faint">
+        Já tem conta?{" "}
+        <Link href="/login" className="font-medium text-brass hover:text-brass-strong">
+          Entrar
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

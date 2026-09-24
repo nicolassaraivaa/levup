@@ -1,121 +1,159 @@
 import { anthropic } from "@/lib/anthropic";
 import { NextRequest, NextResponse } from "next/server";
+import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
 const OBJETIVO_LABELS: Record<string, string> = {
   primeiro_emprego: "conseguir o primeiro emprego na área",
   crescimento_carreira: "crescer na carreira atual",
   oportunidades_internacionais: "buscar oportunidades internacionais",
-  melhoria_ssi: "melhorar o Social Selling Index (SSI) e a presença no LinkedIn",
 };
 
-function extractMeta(html: string, property: string): string | null {
-  const patterns = [
-    new RegExp(
-      `<meta[^>]+property=["']${property}["'][^>]+content=["']([^"']*)["']`,
-      "i",
-    ),
-    new RegExp(
-      `<meta[^>]+content=["']([^"']*)["'][^>]+property=["']${property}["']`,
-      "i",
-    ),
-  ];
-  for (const re of patterns) {
-    const match = html.match(re);
-    if (match) return decodeEntities(match[1]);
-  }
-  return null;
-}
+const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
-function decodeEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-}
+type Modo = "texto" | "imagem" | "pdf";
 
 export async function POST(req: NextRequest) {
-  const { objetivo, url } = await req.json();
+  const { objetivo, modo, texto, arquivo } = (await req.json()) as {
+    objetivo: string;
+    modo: Modo;
+    texto?: string;
+    arquivo?: { base64: string; mediaType: string };
+  };
 
-  if (!objetivo || !url) {
+  if (!objetivo || !modo) {
     return NextResponse.json(
-      { error: "Preencha o objetivo e a URL do perfil." },
+      { error: "Preencha o objetivo e envie o conteúdo do seu perfil." },
+      { status: 400 },
+    );
+  }
+  if (modo === "texto" && !texto?.trim()) {
+    return NextResponse.json(
+      { error: "Cole o texto do seu perfil do LinkedIn." },
+      { status: 400 },
+    );
+  }
+  if ((modo === "imagem" || modo === "pdf") && !arquivo?.base64) {
+    return NextResponse.json(
+      { error: "Envie um arquivo válido." },
+      { status: 400 },
+    );
+  }
+  if (modo === "imagem" && arquivo && !IMAGE_MEDIA_TYPES.includes(arquivo.mediaType)) {
+    return NextResponse.json(
+      { error: "Formato de imagem não suportado. Use JPEG, PNG, GIF ou WEBP." },
       { status: 400 },
     );
   }
 
-  let hostname: string;
-  try {
-    hostname = new URL(url).hostname;
-  } catch {
-    return NextResponse.json({ error: "URL inválida." }, { status: 400 });
-  }
-  if (!hostname.endsWith("linkedin.com")) {
-    return NextResponse.json(
-      { error: "Informe uma URL de perfil do LinkedIn (linkedin.com/in/...)." },
-      { status: 400 },
-    );
-  }
+  const objetivoLabel = OBJETIVO_LABELS[objetivo] || objetivo;
 
-  try {
-    const pageRes = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        Accept: "text/html",
+  const content: ContentBlockParam[] = [];
+
+  if (modo === "imagem" && arquivo) {
+    content.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: arquivo.mediaType as
+          | "image/jpeg"
+          | "image/png"
+          | "image/gif"
+          | "image/webp",
+        data: arquivo.base64,
       },
     });
-    const html = await pageRes.text();
+    content.push({
+      type: "text",
+      text: "Essa é uma captura de tela do perfil do LinkedIn do candidato. Analise todas as informações visíveis. Gere a análise completa.",
+    });
+  } else if (modo === "pdf" && arquivo) {
+    content.push({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: arquivo.base64 },
+    });
+    content.push({
+      type: "text",
+      text: "Esse é o PDF exportado do perfil do LinkedIn do candidato ('Salvar como PDF' do próprio LinkedIn). Analise todas as informações do documento. Gere a análise completa.",
+    });
+  } else {
+    content.push({
+      type: "text",
+      text: `Texto colado do perfil do LinkedIn do candidato:\n\n${texto}\n\nGere a análise completa.`,
+    });
+  }
 
-    const ogTitle = extractMeta(html, "og:title");
-    const ogDescription = extractMeta(html, "og:description");
+  try {
+    const systemPrompt = `Você é uma recrutadora sênior especializada em LinkedIn, avaliando perfis de candidatos brasileiros de tecnologia.
 
-    const bloqueado =
-      !ogTitle ||
-      /log in|sign up|entrar|cadastr/i.test(ogTitle) ||
-      ogTitle.trim().toLowerCase() === "linkedin";
+O candidato quer usar o LinkedIn para ${objetivoLabel}.
 
-    if (bloqueado) {
-      return NextResponse.json(
-        {
-          error:
-            "Não foi possível obter os dados públicos desse perfil. O LinkedIn costuma bloquear acessos automatizados — confirme se a URL está correta, se o perfil é público, e tente novamente.",
-        },
-        { status: 422 },
-      );
+Analise cuidadosamente todas as informações do perfil que foram enviadas (headline, seção "sobre", experiências, formação, habilidades) e produza uma auditoria completa, honesta e acionável — como a avaliação real de uma recrutadora experiente, não elogios genéricos.
+
+Nos campos "antes" dos exemplos de melhoria, use trechos REAIS extraídos do que foi enviado (nunca invente o que o candidato já tem escrito).
+
+Responda APENAS em JSON válido, sem markdown, com essa estrutura exata:
+{
+  "nome": "nome do candidato como aparece no perfil",
+  "headline": "a headline atual do perfil, tal como está escrita",
+  "score": número de 0 a 100 (nota geral do perfil),
+  "resumo": "parágrafo avaliando o perfil como um todo, mencionando se está alinhado ao objetivo de ${objetivoLabel}",
+  "experiencia": {
+    "score": número de 0 a 100,
+    "analise": "parágrafo avaliando a seção de experiências: clareza, quantificação de resultados, verbos de ação, profundidade",
+    "destaques": ["destaque 1", "destaque 2", "destaque 3", "destaque 4"]
+  },
+  "habilidades": {
+    "score": número de 0 a 100,
+    "analise": "parágrafo avaliando as habilidades listadas e se cobrem o que o mercado busca para o objetivo do candidato",
+    "sugeridas": [
+      { "nome": "nome da habilidade a adicionar", "descricao": "uma frase de por que essa habilidade importa pro objetivo do candidato" }
+    ] (de 3 a 6 sugestões)
+  },
+  "educacao": {
+    "score": número de 0 a 100,
+    "analise": "parágrafo avaliando a seção de formação acadêmica e certificações"
+  },
+  "melhorias": [
+    {
+      "titulo": "título objetivo da melhoria",
+      "prioridade": "alta" | "média" | "baixa",
+      "esforco": "vitória rápida" | "esforço médio" | "esforço alto",
+      "problema": "o que está fraco ou ausente hoje, especificamente",
+      "solucao": "o que fazer a respeito, de forma concreta",
+      "impacto_esperado": "o que muda na prática pro candidato ao aplicar essa melhoria",
+      "exemplos": [{ "antes": "trecho REAL atual extraído do perfil enviado", "depois": "reescrita sugerida e melhorada" }] (1 ou 2 exemplos),
+      "passo_a_passo": ["passo 1", "passo 2", "passo 3", "passo 4"]
+    }
+  ] (gere de 2 a 4 melhorias, as mais impactantes primeiro),
+  "acoes": ["próximo passo recomendado 1", "próximo passo recomendado 2", "próximo passo recomendado 3"]
+}`;
+
+    let analise: unknown = null;
+    let erroParse: unknown = null;
+
+    for (let tentativa = 0; tentativa < 2 && !analise; tentativa++) {
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-5",
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: "user", content }],
+      });
+
+      const text =
+        message.content[0].type === "text" ? message.content[0].text : "{}";
+      try {
+        analise = JSON.parse(text.replace(/```json|```/g, "").trim());
+      } catch (parseError) {
+        erroParse = parseError;
+        console.error(
+          `Auditoria de LinkedIn: JSON inválido na tentativa ${tentativa + 1}, tentando de novo.`,
+          parseError,
+        );
+      }
     }
 
-    const conteudoPublico = [ogTitle, ogDescription].filter(Boolean).join("\n");
+    if (!analise) throw erroParse ?? new Error("Resposta da IA em formato inválido.");
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 1536,
-      system: `Você é um especialista em recrutamento e otimização de perfis do LinkedIn para desenvolvedores júnior brasileiros.
-
-O usuário quer usar o LinkedIn para ${OBJETIVO_LABELS[objetivo] || objetivo}.
-
-Você recebeu apenas os dados públicos de pré-visualização do perfil (título e descrição expostos publicamente pelo LinkedIn), já que o conteúdo completo exige login. Trabalhe com o que está disponível e seja transparente sobre a limitação nas sugestões, orientando o candidato a manter essas informações públicas completas e otimizadas.
-
-Responda APENAS em JSON válido com essa estrutura exata:
-{
-  "score": número de 0 a 100,
-  "resumo": "parágrafo com avaliação geral do que é visível publicamente",
-  "pontos_fortes": ["ponto 1", "ponto 2"],
-  "gaps": ["gap 1", "gap 2"],
-  "sugestoes": ["sugestão 1", "sugestão 2", "sugestão 3"]
-}`,
-      messages: [
-        {
-          role: "user",
-          content: `Dados públicos do perfil do LinkedIn:\n\n${conteudoPublico}\n\nGere a análise.`,
-        },
-      ],
-    });
-
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "{}";
-    const analise = JSON.parse(text.replace(/```json|```/g, "").trim());
     return NextResponse.json({ analise });
   } catch (error) {
     console.error("Erro na auditoria de LinkedIn:", error);

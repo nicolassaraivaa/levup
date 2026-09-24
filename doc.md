@@ -1,1 +1,1 @@
-esse projeto e pra minha faculdade,
+esse projeto e pra minha faculdad

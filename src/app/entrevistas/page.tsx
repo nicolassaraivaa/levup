@@ -3,22 +3,31 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import type { Profile, Mensagem, FeedbackEntrevista } from "@/lib/types";
+import type { Profile, RespostaEntrevista, FeedbackEntrevista } from "@/lib/types";
+import type { AreaDiagnostico, NivelAlvo } from "@/lib/diagnostico";
+import {
+  MINIMO_PERGUNTAS_ENTREVISTA,
+  MAXIMO_PERGUNTAS_ENTREVISTA,
+  TEMPO_LIMITE_SEGUNDOS,
+  montarPlanoEntrevista,
+  type EtapaPlanoEntrevista,
+} from "@/lib/entrevista";
 import Sidebar from "@/components/Sidebar";
 import {
   Mic,
-  Code2,
-  Users,
-  Lightbulb,
+  Palette,
+  Settings,
+  Rocket,
+  Smartphone,
+  Timer,
   BarChart3,
   FileText,
   CheckCircle2,
   AlertTriangle,
   AlertCircle,
   ArrowRight,
+  Lightbulb,
 } from "lucide-react";
-
-const MAX_MENSAGENS = 10;
 
 async function postEntrevista(body: object) {
   const res = await fetch("/api/entrevistas", {
@@ -33,20 +42,52 @@ async function postEntrevista(body: object) {
   return data;
 }
 
+const AREAS: { id: AreaDiagnostico; label: string; icon: typeof Palette; desc: string }[] = [
+  { id: "frontend", label: "Frontend", icon: Palette, desc: "HTML, CSS, JavaScript, React" },
+  { id: "backend", label: "Backend", icon: Settings, desc: "Node.js, APIs, Banco de dados" },
+  { id: "fullstack", label: "Full Stack", icon: Rocket, desc: "Frontend + Backend" },
+  { id: "mobile", label: "Mobile", icon: Smartphone, desc: "React Native, Flutter" },
+];
+
+const NIVEIS: { id: NivelAlvo; label: string; desc: string }[] = [
+  { id: "estagio", label: "Estágio", desc: "Fundamentos e primeiros projetos" },
+  { id: "junior", label: "Júnior", desc: "Já atuou em projetos reais" },
+  { id: "pleno", label: "Pleno", desc: "Autonomia no dia a dia" },
+];
+
+function formatarTempo(segundos: number) {
+  const m = Math.floor(segundos / 60);
+  const s = segundos % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatarLimiteMinutos(segundos: number) {
+  if (segundos % 60 === 0) {
+    const m = segundos / 60;
+    return `${m} ${m === 1 ? "minuto" : "minutos"}`;
+  }
+  return `${segundos} segundos`;
+}
+
 export default function EntrevistasPage() {
-  const [etapa, setEtapa] = useState<"config" | "entrevista" | "feedback">(
+  const [etapa, setEtapa] = useState<"config" | "entrevista" | "feedback" | "cancelada">(
     "config",
   );
-  const [tipo, setTipo] = useState<"tecnica" | "comportamental">("tecnica");
-  const [idioma, setIdioma] = useState<"PT" | "EN">("PT");
-  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [areaSelecionada, setAreaSelecionada] = useState<AreaDiagnostico | "">("");
+  const [nivelSelecionado, setNivelSelecionado] = useState<NivelAlvo | "">("");
+  const [plano, setPlano] = useState<EtapaPlanoEntrevista[]>([]);
+  const [respostas, setRespostas] = useState<RespostaEntrevista[]>([]);
+  const [perguntaAtual, setPerguntaAtual] = useState("");
+  const [temaAtual, setTemaAtual] = useState("");
+  const [tipoAtual, setTipoAtual] = useState<"tecnica" | "comportamental">("comportamental");
   const [inputUsuario, setInputUsuario] = useState("");
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
   const [feedback, setFeedback] = useState<FeedbackEntrevista | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [totalRespostas, setTotalRespostas] = useState(0);
+  const [tempoRestante, setTempoRestante] = useState(TEMPO_LIMITE_SEGUNDOS);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -72,25 +113,53 @@ export default function EntrevistasPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [mensagens]);
+  }, [respostas, perguntaAtual]);
+
+  function pararTimer() {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  useEffect(() => () => pararTimer(), []);
+
+  function iniciarTimer() {
+    pararTimer();
+    setTempoRestante(TEMPO_LIMITE_SEGUNDOS);
+    timerRef.current = setInterval(() => {
+      setTempoRestante((t) => {
+        if (t <= 1) {
+          pararTimer();
+          setEtapa("cancelada");
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+  }
 
   async function iniciarEntrevista() {
+    if (!areaSelecionada) return;
     setLoading(true);
     setErro("");
+    const novoPlano = montarPlanoEntrevista(areaSelecionada);
+    setPlano(novoPlano);
     setEtapa("entrevista");
 
     try {
       const data = await postEntrevista({
-        tipo,
-        idioma,
-        etapa: "iniciar",
-        mensagens: [],
+        area: areaSelecionada,
+        nivel: nivelSelecionado,
+        etapa: "pergunta",
+        respostas: [],
+        tema: novoPlano[0].tema,
+        tipo: novoPlano[0].tipo,
       });
-      const primeiraMensagem: Mensagem = {
-        role: "assistant",
-        content: data.resposta,
-      };
-      setMensagens([primeiraMensagem]);
+      setPerguntaAtual(data.pergunta);
+      setTemaAtual(novoPlano[0].tema);
+      setTipoAtual(novoPlano[0].tipo);
+      iniciarTimer();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro inesperado.");
       setEtapa("config");
@@ -101,57 +170,57 @@ export default function EntrevistasPage() {
 
   async function enviarResposta() {
     if (!inputUsuario.trim() || loading) return;
+    pararTimer();
     setLoading(true);
     setErro("");
 
-    const novaMensagemUsuario: Mensagem = {
-      role: "user",
-      content: inputUsuario,
-    };
-    const novasMensagens = [...mensagens, novaMensagemUsuario];
-    setMensagens(novasMensagens);
+    const perguntaRespondida = perguntaAtual;
+    const temaRespondido = temaAtual;
+    const tipoRespondido = tipoAtual;
+    const textoResposta = inputUsuario;
     setInputUsuario("");
 
-    const novasRespostas = totalRespostas + 1;
-    setTotalRespostas(novasRespostas);
+    const respostasParaEnvio: RespostaEntrevista[] = [
+      ...respostas,
+      {
+        tipo: tipoRespondido,
+        tema: temaRespondido,
+        pergunta: perguntaRespondida,
+        resposta: textoResposta,
+        score: null,
+      },
+    ];
+    const proximoSlot = plano[respostasParaEnvio.length];
 
     try {
-      if (novasRespostas >= MAX_MENSAGENS / 2) {
-        // Gerar feedback
-        const data = await postEntrevista({
-          tipo,
-          idioma,
-          etapa: "feedback",
-          mensagens: novasMensagens,
-        });
-        setFeedback(data.feedback);
+      const data = await postEntrevista({
+        area: areaSelecionada,
+        nivel: nivelSelecionado,
+        etapa: "pergunta",
+        respostas: respostasParaEnvio,
+        tema: proximoSlot?.tema,
+        tipo: proximoSlot?.tipo,
+      });
 
-        // Salvar no Supabase
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.from("interview_sessions").insert({
-            user_id: user.id,
-            type: tipo,
-            language: idioma,
-            messages: novasMensagens,
-            feedback: data.feedback,
-          });
-        }
+      const respostasAtualizadas: RespostaEntrevista[] = [
+        ...respostas,
+        {
+          tipo: tipoRespondido,
+          tema: temaRespondido,
+          pergunta: perguntaRespondida,
+          resposta: textoResposta,
+          score: data.score_ultima_resposta,
+        },
+      ];
+      setRespostas(respostasAtualizadas);
 
-        setEtapa("feedback");
+      if (data.finalizado || !proximoSlot) {
+        await finalizarComFeedback(respostasAtualizadas);
       } else {
-        const data = await postEntrevista({
-          tipo,
-          idioma,
-          etapa: "responder",
-          mensagens: novasMensagens,
-        });
-        setMensagens((prev) => [
-          ...prev,
-          { role: "assistant", content: data.resposta },
-        ]);
+        setPerguntaAtual(data.pergunta);
+        setTemaAtual(proximoSlot.tema);
+        setTipoAtual(proximoSlot.tipo);
+        iniciarTimer();
       }
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro inesperado.");
@@ -160,130 +229,150 @@ export default function EntrevistasPage() {
     }
   }
 
-  function reiniciar() {
-    setEtapa("config");
-    setMensagens([]);
-    setInputUsuario("");
-    setFeedback(null);
-    setTotalRespostas(0);
+  async function finalizarComFeedback(respostasFinais: RespostaEntrevista[]) {
+    const data = await postEntrevista({
+      area: areaSelecionada,
+      nivel: nivelSelecionado,
+      etapa: "feedback",
+      respostas: respostasFinais,
+    });
+    setFeedback(data.feedback);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("interview_sessions").insert({
+        user_id: user.id,
+        type: "mista",
+        language: "PT",
+        messages: respostasFinais,
+        feedback: { ...data.feedback, area: areaSelecionada, nivel_alvo: nivelSelecionado },
+      });
+    }
+
+    setEtapa("feedback");
   }
 
+  function reiniciar() {
+    pararTimer();
+    setEtapa("config");
+    setPlano([]);
+    setRespostas([]);
+    setPerguntaAtual("");
+    setInputUsuario("");
+    setFeedback(null);
+    setTempoRestante(TEMPO_LIMITE_SEGUNDOS);
+  }
+
+  const tecnicasRespondidas = respostas.filter((r) => r.tipo === "tecnica" && r.score != null);
+  const comportamentaisRespondidas = respostas.filter(
+    (r) => r.tipo === "comportamental" && r.score != null,
+  );
+  const mediaTecnica = tecnicasRespondidas.length
+    ? Math.round(
+        tecnicasRespondidas.reduce((soma, r) => soma + (r.score ?? 0), 0) /
+          tecnicasRespondidas.length,
+      )
+    : null;
+  const mediaComportamental = comportamentaisRespondidas.length
+    ? Math.round(
+        comportamentaisRespondidas.reduce((soma, r) => soma + (r.score ?? 0), 0) /
+          comportamentaisRespondidas.length,
+      )
+    : null;
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-background text-ink">
       <Sidebar active="/entrevistas" profile={profile} />
 
-      {/* Main */}
       <div className="ml-64 flex flex-col h-screen">
         {/* CONFIG */}
         {etapa === "config" && (
           <div className="p-8 max-w-2xl">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
-                <Mic size={24} className="text-cyan-400" />
+              <h2 className="text-2xl font-bold text-ink flex items-center gap-2.5">
+                <Mic size={24} className="text-brass" />
                 Simulador de Entrevistas
               </h2>
-              <p className="text-gray-400 mt-2">
-                Configure sua sessão de entrevista e pratique com feedback
-                imediato de IA.
+              <p className="text-ink-muted mt-2">
+                Uma entrevista completa em português, misturando perguntas
+                técnicas e comportamentais — como uma entrevista de verdade.
               </p>
             </div>
 
             {erro && (
-              <div className="mb-6 bg-red-500/10 border border-red-800 rounded-xl p-4 text-sm text-red-300 flex gap-2.5">
+              <div className="mb-6 bg-rust-wash border border-rust/30 rounded-xl p-4 text-sm text-rust flex gap-2.5">
                 <AlertCircle size={16} className="shrink-0 mt-0.5" />
                 {erro}
               </div>
             )}
 
             <div className="space-y-6">
-              {/* Tipo */}
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-bold text-white mb-4">
-                  Tipo de Entrevista
+              <div>
+                <h3 className="text-sm font-semibold text-ink mb-3">Área técnica</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {AREAS.map((area) => (
+                    <button
+                      key={area.id}
+                      onClick={() => setAreaSelecionada(area.id)}
+                      className={`p-4 rounded-xl border text-left transition ${
+                        areaSelecionada === area.id
+                          ? "border-brass bg-brass-wash"
+                          : "border-hairline bg-surface hover:border-hairline-strong"
+                      }`}
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-brass-wash text-brass flex items-center justify-center mb-2">
+                        <area.icon size={17} />
+                      </div>
+                      <h4 className="font-bold text-ink">{area.label}</h4>
+                      <p className="text-ink-muted text-sm mt-1">{area.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-ink mb-3">
+                  Nível da vaga que você busca
                 </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setTipo("tecnica")}
-                    className={`p-4 rounded-xl border text-left transition ${
-                      tipo === "tecnica"
-                        ? "border-cyan-500 bg-cyan-600/20"
-                        : "border-gray-700 bg-gray-800 hover:border-gray-600"
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-2">
-                      <Code2 size={17} />
-                    </div>
-                    <h4 className="font-bold text-white">Técnica</h4>
-                    <p className="text-gray-400 text-sm mt-1">
-                      Algoritmos, conceitos e boas práticas
-                    </p>
-                  </button>
-                  <button
-                    onClick={() => setTipo("comportamental")}
-                    className={`p-4 rounded-xl border text-left transition ${
-                      tipo === "comportamental"
-                        ? "border-cyan-500 bg-cyan-600/20"
-                        : "border-gray-700 bg-gray-800 hover:border-gray-600"
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center mb-2">
-                      <Users size={17} />
-                    </div>
-                    <h4 className="font-bold text-white">Comportamental</h4>
-                    <p className="text-gray-400 text-sm mt-1">
-                      Soft skills e experiências
-                    </p>
-                  </button>
+                <div className="grid grid-cols-3 gap-4">
+                  {NIVEIS.map((nivel) => (
+                    <button
+                      key={nivel.id}
+                      onClick={() => setNivelSelecionado(nivel.id)}
+                      className={`p-4 rounded-xl border text-left transition ${
+                        nivelSelecionado === nivel.id
+                          ? "border-brass bg-brass-wash"
+                          : "border-hairline bg-surface hover:border-hairline-strong"
+                      }`}
+                    >
+                      <h4 className="font-bold text-ink text-sm">{nivel.label}</h4>
+                      <p className="text-ink-muted text-xs mt-1">{nivel.desc}</p>
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Idioma */}
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-bold text-white mb-4">Idioma</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setIdioma("PT")}
-                    className={`p-4 rounded-xl border text-center transition ${
-                      idioma === "PT"
-                        ? "border-cyan-500 bg-cyan-600/20"
-                        : "border-gray-700 bg-gray-800 hover:border-gray-600"
-                    }`}
-                  >
-                    <div className="text-xs font-bold tracking-wider text-cyan-400 mb-1.5">
-                      PT
-                    </div>
-                    <p className="font-bold text-white">Português</p>
-                  </button>
-                  <button
-                    onClick={() => setIdioma("EN")}
-                    className={`p-4 rounded-xl border text-center transition ${
-                      idioma === "EN"
-                        ? "border-cyan-500 bg-cyan-600/20"
-                        : "border-gray-700 bg-gray-800 hover:border-gray-600"
-                    }`}
-                  >
-                    <div className="text-xs font-bold tracking-wider text-cyan-400 mb-1.5">
-                      EN
-                    </div>
-                    <p className="font-bold text-white">English</p>
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-gray-900 border border-cyan-800 rounded-xl p-4 text-sm text-gray-400 flex gap-2.5">
-                <Lightbulb size={16} className="text-cyan-400 shrink-0 mt-0.5" />
+              <div className="bg-surface border border-brass/30 rounded-xl p-4 text-sm text-ink-muted flex gap-2.5">
+                <Lightbulb size={16} className="text-brass shrink-0 mt-0.5" />
                 <span>
-                  A entrevista terá{" "}
-                  <strong className="text-white">5 perguntas</strong> e ao
-                  final você receberá um feedback detalhado com score e dicas
-                  de melhoria.
+                  A entrevista é em <strong className="text-ink">português</strong>,
+                  tem no mínimo{" "}
+                  <strong className="text-ink">{MINIMO_PERGUNTAS_ENTREVISTA} perguntas</strong>{" "}
+                  (pode chegar a {MAXIMO_PERGUNTAS_ENTREVISTA} se identificarmos
+                  dificuldade) e você tem{" "}
+                  <strong className="text-ink">
+                    {formatarLimiteMinutos(TEMPO_LIMITE_SEGUNDOS)}
+                  </strong>{" "}
+                  por resposta — estourou o tempo, a entrevista é encerrada.
                 </span>
               </div>
 
               <button
                 onClick={iniciarEntrevista}
-                disabled={loading}
-                className="w-full bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition flex items-center justify-center gap-2"
+                disabled={!areaSelecionada || !nivelSelecionado || loading}
+                className="w-full bg-brass hover:bg-brass-strong disabled:opacity-50 text-background font-semibold py-4 rounded-xl transition flex items-center justify-center gap-2"
               >
                 {loading ? "Iniciando entrevista..." : "Iniciar Entrevista"}
                 {!loading && <ArrowRight size={17} />}
@@ -295,67 +384,80 @@ export default function EntrevistasPage() {
         {/* ENTREVISTA */}
         {etapa === "entrevista" && (
           <div className="flex flex-col h-full">
-            {/* Header */}
-            <div className="p-4 border-b border-gray-800 flex items-center justify-between bg-gray-900">
+            <div className="p-4 border-b border-hairline flex items-center justify-between bg-surface">
               <div>
-                <h2 className="font-bold text-white flex items-center gap-2">
-                  <Mic size={16} className="text-cyan-400" />
-                  Entrevista {tipo === "tecnica" ? "Técnica" : "Comportamental"}
-                  {" — "}
-                  {idioma}
+                <h2 className="font-bold text-ink flex items-center gap-2">
+                  <Mic size={16} className="text-brass" />
+                  Entrevista — {areaSelecionada}
                 </h2>
-                <p className="text-gray-400 text-xs mt-0.5">
-                  Pergunta {totalRespostas + 1} de 5
+                <p className="text-ink-faint text-xs mt-0.5">
+                  Pergunta {respostas.length + 1} · mínimo{" "}
+                  {MINIMO_PERGUNTAS_ENTREVISTA}
                 </p>
               </div>
-              <div className="w-32 bg-gray-800 rounded-full h-2">
-                <div
-                  className="bg-cyan-500 h-2 rounded-full transition-all"
-                  style={{ width: `${(totalRespostas / 5) * 100}%` }}
-                />
+              <div
+                className={`flex items-center gap-2 font-mono text-sm rounded-md border px-3 py-1.5 ${
+                  tempoRestante <= 20
+                    ? "border-rust/40 bg-rust-wash text-rust"
+                    : "border-hairline-strong text-ink-muted"
+                }`}
+              >
+                <Timer size={14} />
+                {formatarTempo(tempoRestante)}
               </div>
             </div>
 
-            {/* Mensagens */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {mensagens.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-2xl rounded-2xl px-5 py-3 ${
-                      msg.role === "user"
-                        ? "bg-cyan-600 text-white"
-                        : "bg-gray-900 border border-gray-700 text-gray-200"
-                    }`}
-                  >
-                    {msg.role === "assistant" && (
-                      <p className="text-xs text-gray-500 mb-1">
-                        Entrevistador
+              {respostas.map((r, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex justify-start">
+                    <div className="max-w-2xl rounded-2xl px-5 py-3 bg-surface border border-hairline-strong text-ink">
+                      <p className="text-xs text-ink-faint mb-1 font-mono uppercase tracking-wide">
+                        {r.tipo === "tecnica" ? "técnica" : "comportamental"} · {r.tema}
                       </p>
-                    )}
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                      {msg.content}
-                    </p>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {r.pergunta}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="max-w-2xl rounded-2xl px-5 py-3 bg-brass text-background">
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {r.resposta}
+                      </p>
+                    </div>
                   </div>
                 </div>
               ))}
+
+              {perguntaAtual && !loading && (
+                <div className="flex justify-start">
+                  <div className="max-w-2xl rounded-2xl px-5 py-3 bg-surface border border-hairline-strong text-ink">
+                    <p className="text-xs text-ink-faint mb-1 font-mono uppercase tracking-wide">
+                      {tipoAtual === "tecnica" ? "técnica" : "comportamental"} · {temaAtual}
+                    </p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {perguntaAtual}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-900 border border-gray-700 rounded-2xl px-5 py-3">
-                    <p className="text-xs text-gray-500 mb-1">Entrevistador</p>
+                  <div className="bg-surface border border-hairline-strong rounded-2xl px-5 py-3">
+                    <p className="text-xs text-ink-faint mb-1">Entrevistador</p>
                     <div className="flex gap-1">
                       <span
-                        className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                        className="w-2 h-2 bg-ink-faint rounded-full animate-bounce"
                         style={{ animationDelay: "0ms" }}
                       />
                       <span
-                        className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                        className="w-2 h-2 bg-ink-faint rounded-full animate-bounce"
                         style={{ animationDelay: "150ms" }}
                       />
                       <span
-                        className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                        className="w-2 h-2 bg-ink-faint rounded-full animate-bounce"
                         style={{ animationDelay: "300ms" }}
                       />
                     </div>
@@ -365,10 +467,9 @@ export default function EntrevistasPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
-            <div className="p-4 border-t border-gray-800 bg-gray-900">
+            <div className="p-4 border-t border-hairline bg-surface">
               {erro && (
-                <div className="mb-3 bg-red-500/10 border border-red-800 rounded-xl p-3 text-sm text-red-300 flex gap-2.5">
+                <div className="mb-3 bg-rust-wash border border-rust/30 rounded-xl p-3 text-sm text-rust flex gap-2.5">
                   <AlertCircle size={16} className="shrink-0 mt-0.5" />
                   {erro}
                 </div>
@@ -383,26 +484,61 @@ export default function EntrevistasPage() {
                       enviarResposta();
                     }
                   }}
-                  placeholder={
-                    idioma === "PT"
-                      ? "Digite sua resposta..."
-                      : "Type your answer..."
-                  }
+                  placeholder="Digite sua resposta..."
                   rows={2}
                   disabled={loading}
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition resize-none text-sm"
+                  className="flex-1 bg-surface-raised border border-hairline-strong rounded-xl px-4 py-3 text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition resize-none text-sm"
                 />
                 <button
                   onClick={enviarResposta}
                   disabled={!inputUsuario.trim() || loading}
-                  className="bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white px-5 rounded-xl transition font-semibold"
+                  className="bg-brass hover:bg-brass-strong disabled:opacity-50 text-background px-5 rounded-xl transition font-semibold"
                 >
                   Enviar
                 </button>
               </div>
-              <p className="text-gray-600 text-xs mt-2">
-                Enter para enviar • Shift+Enter para nova linha
+              <p className="text-ink-faint text-xs mt-2">
+                Enter para enviar · Shift+Enter para nova linha
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* CANCELADA POR TIMEOUT */}
+        {etapa === "cancelada" && (
+          <div className="p-8 max-w-xl">
+            <div className="bg-surface border border-rust/30 rounded-2xl p-8 text-center">
+              <div className="w-12 h-12 rounded-full bg-rust-wash text-rust flex items-center justify-center mx-auto mb-4">
+                <Timer size={22} />
+              </div>
+              <h2 className="text-xl font-bold text-ink">
+                Entrevista encerrada — tempo esgotado
+              </h2>
+              <p className="text-ink-muted text-sm mt-3 leading-relaxed">
+                Você não respondeu a pergunta {respostas.length + 1} dentro
+                de {formatarLimiteMinutos(TEMPO_LIMITE_SEGUNDOS)}. Em
+                entrevistas reais o tempo de resposta também é curto — é
+                exatamente isso que estamos treinando aqui.
+              </p>
+              <p className="text-ink-faint text-xs mt-2">
+                Você completou {respostas.length}{" "}
+                {respostas.length === 1 ? "pergunta" : "perguntas"} antes do
+                tempo acabar.
+              </p>
+              <div className="flex gap-4 mt-6">
+                <button
+                  onClick={reiniciar}
+                  className="flex-1 bg-surface-raised hover:bg-hairline-strong text-ink font-semibold py-3 rounded-xl transition"
+                >
+                  Tentar de novo
+                </button>
+                <a
+                  href="/dashboard"
+                  className="flex-1 bg-brass hover:bg-brass-strong text-background font-semibold py-3 rounded-xl transition text-center block"
+                >
+                  Voltar ao dashboard
+                </a>
+              </div>
             </div>
           </div>
         )}
@@ -411,78 +547,86 @@ export default function EntrevistasPage() {
         {etapa === "feedback" && feedback && (
           <div className="p-8 max-w-3xl overflow-y-auto">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
-                <BarChart3 size={24} className="text-cyan-400" />
+              <h2 className="text-2xl font-bold text-ink flex items-center gap-2.5">
+                <BarChart3 size={24} className="text-brass" />
                 Feedback da Entrevista
               </h2>
-              <p className="text-gray-400 mt-1">
-                Entrevista {tipo} em {idioma === "PT" ? "Português" : "Inglês"}
+              <p className="text-ink-muted mt-1">
+                Entrevista de {areaSelecionada} · nível alvo:{" "}
+                {NIVEIS.find((n) => n.id === nivelSelecionado)?.label} · {respostas.length}{" "}
+                perguntas
               </p>
             </div>
 
-            {/* Score */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6 text-center">
-              <div className="text-6xl font-black text-cyan-400 mb-2">
+            <div className="bg-surface border border-hairline rounded-2xl p-6 mb-6 text-center">
+              <div className="text-6xl font-semibold text-brass mb-2 font-mono">
                 {feedback.score}
               </div>
-              <div className="text-gray-400 text-sm mb-2">
-                Score Geral / 100
-              </div>
-              <div className="inline-block bg-cyan-600/20 border border-cyan-500 text-cyan-300 px-4 py-1 rounded-full text-sm font-medium capitalize">
-                Nível: {feedback.nivel}
+              <div className="text-ink-muted text-sm mb-3">Score Geral / 100</div>
+              <div className="inline-flex flex-wrap items-center justify-center gap-2">
+                <span className="inline-block bg-brass-wash border border-brass text-brass-strong px-4 py-1 rounded-full text-sm font-medium capitalize">
+                  Nível: {feedback.nivel}
+                </span>
+                {mediaTecnica !== null && (
+                  <span className="inline-block bg-surface-raised border border-hairline-strong text-ink-muted px-4 py-1 rounded-full text-sm font-mono">
+                    Técnica: {mediaTecnica}/100
+                  </span>
+                )}
+                {mediaComportamental !== null && (
+                  <span className="inline-block bg-surface-raised border border-hairline-strong text-ink-muted px-4 py-1 rounded-full text-sm font-mono">
+                    Comportamental: {mediaComportamental}/100
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Resumo */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-6">
-              <h3 className="font-bold text-white mb-3 flex items-center gap-2">
-                <FileText size={16} className="text-gray-400" />
+            <div className="bg-surface border border-hairline rounded-2xl p-6 mb-6">
+              <h3 className="font-bold text-ink mb-3 flex items-center gap-2">
+                <FileText size={16} className="text-ink-faint" />
                 Avaliação Geral
               </h3>
-              <p className="text-gray-300 leading-relaxed">{feedback.resumo}</p>
+              <p className="text-ink-muted leading-relaxed">{feedback.resumo}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div className="bg-gray-900 border border-green-800 rounded-2xl p-6">
-                <h3 className="font-bold text-green-400 mb-3 flex items-center gap-2">
+              <div className="bg-surface border border-sage/30 rounded-2xl p-6">
+                <h3 className="font-bold text-sage mb-3 flex items-center gap-2">
                   <CheckCircle2 size={16} />
                   Pontos Fortes
                 </h3>
                 <ul className="space-y-2">
                   {feedback.pontos_fortes?.map((p: string, i: number) => (
-                    <li key={i} className="text-gray-300 text-sm flex gap-2">
-                      <span className="text-green-400">▸</span> {p}
+                    <li key={i} className="text-ink-muted text-sm flex gap-2">
+                      <span className="text-sage">▸</span> {p}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="bg-gray-900 border border-red-800 rounded-2xl p-6">
-                <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2">
+              <div className="bg-surface border border-rust/30 rounded-2xl p-6">
+                <h3 className="font-bold text-rust mb-3 flex items-center gap-2">
                   <AlertTriangle size={16} />
                   Pontos a Melhorar
                 </h3>
                 <ul className="space-y-2">
                   {feedback.pontos_melhoria?.map((p: string, i: number) => (
-                    <li key={i} className="text-gray-300 text-sm flex gap-2">
-                      <span className="text-red-400">▸</span> {p}
+                    <li key={i} className="text-ink-muted text-sm flex gap-2">
+                      <span className="text-rust">▸</span> {p}
                     </li>
                   ))}
                 </ul>
               </div>
             </div>
 
-            {/* Dicas */}
-            <div className="bg-gray-900 border border-cyan-800 rounded-2xl p-6 mb-6">
-              <h3 className="font-bold text-cyan-400 mb-3 flex items-center gap-2">
+            <div className="bg-surface border border-brass/30 rounded-2xl p-6 mb-6">
+              <h3 className="font-bold text-brass mb-3 flex items-center gap-2">
                 <Lightbulb size={16} />
                 Dicas para Próximas Entrevistas
               </h3>
               <ul className="space-y-2">
                 {feedback.dicas?.map((d: string, i: number) => (
-                  <li key={i} className="text-gray-300 text-sm flex gap-2">
-                    <span className="text-cyan-400 font-bold">{i + 1}.</span>{" "}
-                    {d}
+                  <li key={i} className="text-ink-muted text-sm flex gap-2">
+                    <span className="text-brass font-bold">{i + 1}.</span> {d}
                   </li>
                 ))}
               </ul>
@@ -491,14 +635,13 @@ export default function EntrevistasPage() {
             <div className="flex gap-4">
               <button
                 onClick={reiniciar}
-                className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 rounded-xl transition"
+                className="flex-1 bg-brass hover:bg-brass-strong text-background font-semibold py-3 rounded-xl transition"
               >
                 Nova entrevista
               </button>
-
               <a
                 href="/dashboard"
-                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-semibold py-3 rounded-xl transition text-center block"
+                className="flex-1 bg-surface-raised hover:bg-hairline-strong text-ink font-semibold py-3 rounded-xl transition text-center block"
               >
                 Voltar ao dashboard
               </a>

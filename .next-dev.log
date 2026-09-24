@@ -1,0 +1,187 @@
+
+> levup@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.1 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.15.156:3000
+- Environments: .env.local
+✓ Ready in 341ms
+✓ Running next.config.ts took 20ms
+
+ GET /auditoria 200 in 573ms (next.js: 81ms, proxy.ts: 355ms, application-code: 137ms)
+ GET /cadastro 200 in 144ms (next.js: 56ms, proxy.ts: 15ms, application-code: 73ms)
+ GET /dashboard 200 in 270ms (next.js: 35ms, proxy.ts: 221ms, application-code: 14ms)
+ GET /dashboard 200 in 195ms (next.js: 4ms, proxy.ts: 171ms, application-code: 20ms)
+ GET /auditoria 200 in 199ms (next.js: 8ms, proxy.ts: 156ms, application-code: 35ms)
+ POST /api/auditoria/linkedin 200 in 40s (next.js: 400ms, proxy.ts: 172ms, application-code: 39.5s)
+Erro na auditoria de LinkedIn: Error: Connection error.
+    at async POST (src/app/api/auditoria/linkedin/route.ts:87:21)
+  85 |
+  86 |   try {
+> 87 |     const message = await anthropic.messages.create({
+     |                     ^
+  88 |       model: "claude-sonnet-4-5",
+  89 |       max_tokens: 4096,
+  90 |       system: `Você é uma recrutadora sênior especializada em LinkedIn, avaliando perfis de candidatos brasileiros de tecnologia. {
+  status: undefined,
+  headers: undefined,
+  requestID: undefined,
+  error: undefined,
+  type: null,
+  [cause]: TypeError: fetch failed
+      at async POST (src/app/api/auditoria/linkedin/route.ts:87:21)
+    85 |
+    86 |   try {
+  > 87 |     const message = await anthropic.messages.create({
+       |                     ^
+    88 |       model: "claude-sonnet-4-5",
+    89 |       max_tokens: 4096,
+    90 |       system: `Você é uma recrutadora sênior especializada em LinkedIn, avaliando perfis de candidatos brasileiros de tecnologia. {
+    [cause]: Error: getaddrinfo ENOTFOUND api.anthropic.com
+        at ignore-listed frames {
+      errno: -3008,
+      code: 'ENOTFOUND',
+      syscall: 'getaddrinfo',
+      hostname: 'api.anthropic.com'
+    }
+  }
+}
+ GET /auditoria 200 in 372ms (next.js: 27ms, proxy.ts: 284ms, application-code: 61ms)
+ GET /auditoria 200 in 169ms (next.js: 2ms, proxy.ts: 146ms, application-code: 21ms)
+ GET /cadastro 200 in 35ms (next.js: 4ms, proxy.ts: 4ms, application-code: 28ms)
+ GET /entrevistas 200 in 198ms (next.js: 33ms, proxy.ts: 153ms, application-code: 11ms)
+ GET /dashboard 200 in 192ms (next.js: 8ms, proxy.ts: 157ms, application-code: 27ms)
+ GET /dashboard 200 in 173ms (next.js: 3ms, proxy.ts: 154ms, application-code: 16ms)
+ GET /auditoria 200 in 181ms (next.js: 2ms, proxy.ts: 153ms, application-code: 26ms)
+ GET /diagnostico 200 in 242ms (next.js: 18ms, proxy.ts: 200ms, application-code: 24ms)
+ GET /diagnostico 200 in 229ms (next.js: 5ms, proxy.ts: 159ms, application-code: 65ms)
+ GET /dashboard 200 in 187ms (next.js: 5ms, proxy.ts: 164ms, application-code: 19ms)
+ GET /auditoria 200 in 189ms (next.js: 5ms, proxy.ts: 167ms, application-code: 17ms)
+ GET /entrevistas 200 in 191ms (next.js: 5ms, proxy.ts: 168ms, application-code: 18ms)
+ GET /auditoria 200 in 213ms (next.js: 4ms, proxy.ts: 190ms, application-code: 19ms)
+ POST /api/auditoria/linkedin 200 in 40s (next.js: 3ms, proxy.ts: 153ms, application-code: 39.9s)
+ GET /cadastro 200 in 71ms (next.js: 8ms, proxy.ts: 10ms, application-code: 53ms)
+ GET /dashboard 200 in 223ms (next.js: 4ms, proxy.ts: 206ms, application-code: 14ms)
+ GET /dashboard 200 in 173ms (next.js: 2ms, proxy.ts: 157ms, application-code: 14ms)
+ GET /auditoria 200 in 188ms (next.js: 5ms, proxy.ts: 151ms, application-code: 33ms)
+Erro na auditoria de LinkedIn: SyntaxError: Unterminated string in JSON at position 13731 (line 132 column 411)
+    at JSON.parse (<anonymous>)
+    at POST (src/app/api/auditoria/linkedin/route.ts:147:26)
+  145 |     const text =
+  146 |       message.content[0].type === "text" ? message.content[0].text : "{}";
+> 147 |     const analise = JSON.parse(text.replace(/```json|```/g, "").trim());
+      |                          ^
+  148 |     return NextResponse.json({ analise });
+  149 |   } catch (error) {
+  150 |     console.error("Erro na auditoria de LinkedIn:", error);
+ POST /api/auditoria/linkedin 200 in 70s (next.js: 3ms, proxy.ts: 170ms, application-code: 70s)
+Erro na auditoria de LinkedIn: SyntaxError: Unterminated string in JSON at position 13775 (line 127 column 211)
+    at JSON.parse (<anonymous>)
+    at POST (src/app/api/auditoria/linkedin/route.ts:147:26)
+  145 |     const text =
+  146 |       message.content[0].type === "text" ? message.content[0].text : "{}";
+> 147 |     const analise = JSON.parse(text.replace(/```json|```/g, "").trim());
+      |                          ^
+  148 |     return NextResponse.json({ analise });
+  149 |   } catch (error) {
+  150 |     console.error("Erro na auditoria de LinkedIn:", error);
+ GET /auditoria 200 in 497ms (next.js: 12ms, proxy.ts: 450ms, application-code: 35ms)
+ GET /cadastro 200 in 62ms (next.js: 13ms, proxy.ts: 8ms, application-code: 40ms)
+ GET /dashboard 200 in 246ms (next.js: 8ms, proxy.ts: 216ms, application-code: 23ms)
+ GET /dashboard 200 in 167ms (next.js: 3ms, proxy.ts: 153ms, application-code: 11ms)
+ GET /auditoria 200 in 184ms (next.js: 4ms, proxy.ts: 153ms, application-code: 27ms)
+ POST /api/auditoria/linkedin 200 in 90s (next.js: 10ms, proxy.ts: 160ms, application-code: 90s)
+ GET /auditoria 200 in 534ms (next.js: 7ms, proxy.ts: 477ms, application-code: 51ms)
+ GET /cadastro 200 in 122ms (next.js: 80ms, proxy.ts: 4ms, application-code: 38ms)
+ GET /dashboard 200 in 264ms (next.js: 23ms, proxy.ts: 233ms, application-code: 9ms)
+ GET /dashboard 200 in 172ms (next.js: 3ms, proxy.ts: 153ms, application-code: 16ms)
+ GET /auditoria 200 in 217ms (next.js: 32ms, proxy.ts: 155ms, application-code: 30ms)
+DEBUG stop_reason: end_turn usage: {"input_tokens":1203,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":4273,"service_tier":"standard","inference_geo":"not_available"} text length: 14312 tail: ": [\n    \"Reescrever hoje mesmo a descrição do estágio com bullet points detalhados de entregas reais (tecnologias, problemas resolvidos, resultados)\",\n    \"Adicionar Python, PostgreSQL e pelo menos 8 outras habilidades técnicas relevantes na seção de competências\",\n    \"Listar os 2 melhores projetos pessoais do GitHub como experiência no perfil, com links e descrições técnicas completas\"\n  ]\n}\n```"
+ POST /api/auditoria/linkedin 200 in 89s (next.js: 18ms, proxy.ts: 174ms, application-code: 89s)
+ GET /auditoria 200 in 500ms (next.js: 8ms, proxy.ts: 473ms, application-code: 20ms)
+ GET /cadastro 200 in 73ms (next.js: 20ms, proxy.ts: 8ms, application-code: 45ms)
+ GET /dashboard 200 in 234ms (next.js: 5ms, proxy.ts: 218ms, application-code: 11ms)
+ GET /dashboard 200 in 174ms (next.js: 3ms, proxy.ts: 158ms, application-code: 13ms)
+ GET /auditoria 200 in 180ms (next.js: 4ms, proxy.ts: 149ms, application-code: 27ms)
+ POST /api/auditoria/linkedin 200 in 90s (next.js: 10ms, proxy.ts: 149ms, application-code: 90s)
+[browser] ./src/app/api/auditoria/linkedin/route.ts:139:7
+Error: 'const' declarations must be initialized
+  137 |   "acoes": ["próximo passo recomendado 1", "próximo passo recomendado 2", "próximo passo ...
+  138 | }`,
+> 139 |       messages: [{ role: "user", content }],
+      |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  140 |     });
+  141 |
+  142 |     const text =
+
+Parsing ecmascript source code failed 
+ GET /auditoria 200 in 521ms (next.js: 9ms, proxy.ts: 504ms, application-code: 8ms)
+ GET /auditoria 200 in 179ms (next.js: 6ms, proxy.ts: 155ms, application-code: 18ms)
+ GET /entrevistas 200 in 227ms (next.js: 13ms, proxy.ts: 197ms, application-code: 18ms)
+ GET /auditoria 200 in 181ms (next.js: 5ms, proxy.ts: 159ms, application-code: 18ms)
+ POST /api/auditoria/linkedin 200 in 104s (next.js: 22ms, proxy.ts: 248ms, application-code: 103s)
+ GET /auditoria 200 in 406ms (next.js: 27ms, proxy.ts: 348ms, application-code: 31ms)
+ GET /auditoria 200 in 524ms (next.js: 9ms, proxy.ts: 484ms, application-code: 30ms)
+ GET /auditoria 200 in 232ms (next.js: 2.0ms, proxy.ts: 222ms, application-code: 8ms)
+ GET /auditoria 200 in 232ms (next.js: 5ms, proxy.ts: 207ms, application-code: 20ms)
+ GET /auditoria 200 in 313ms (next.js: 14ms, proxy.ts: 282ms, application-code: 17ms)
+ GET /auditoria 200 in 269ms (next.js: 6ms, proxy.ts: 251ms, application-code: 13ms)
+ GET /auditoria 200 in 208ms (next.js: 4ms, proxy.ts: 192ms, application-code: 13ms)
+ GET /auditoria 200 in 258ms (next.js: 6ms, proxy.ts: 222ms, application-code: 30ms)
+ GET /auditoria 200 in 252ms (next.js: 11ms, proxy.ts: 223ms, application-code: 18ms)
+ GET /auditoria 200 in 303ms (next.js: 12ms, proxy.ts: 264ms, application-code: 28ms)
+ GET /auditoria 200 in 220ms (next.js: 6ms, proxy.ts: 200ms, application-code: 14ms)
+✓ Compiled in 173ms
+ GET /auditoria 200 in 231ms (next.js: 5ms, proxy.ts: 215ms, application-code: 11ms)
+ GET /auditoria 200 in 226ms (next.js: 5ms, proxy.ts: 201ms, application-code: 20ms)
+ GET /auditoria 200 in 730ms (next.js: 24ms, proxy.ts: 641ms, application-code: 65ms)
+ GET /cv 200 in 351ms (next.js: 56ms, proxy.ts: 280ms, application-code: 15ms)
+ GET / 200 in 321ms (next.js: 34ms, proxy.ts: 215ms, application-code: 72ms)
+ GET /cv 200 in 1153ms (next.js: 82ms, proxy.ts: 1047ms, application-code: 24ms)
+ GET /cv 200 in 332ms (next.js: 13ms, proxy.ts: 307ms, application-code: 11ms)
+ GET /cv 200 in 363ms (next.js: 5ms, proxy.ts: 337ms, application-code: 21ms)
+ GET /cv 200 in 463ms (next.js: 4ms, proxy.ts: 431ms, application-code: 28ms)
+ GET /cv 200 in 330ms (next.js: 2ms, proxy.ts: 311ms, application-code: 16ms)
+ GET /cv 200 in 340ms (next.js: 3ms, proxy.ts: 325ms, application-code: 12ms)
+ GET /cv 200 in 417ms (next.js: 5ms, proxy.ts: 393ms, application-code: 19ms)
+ GET /cv 200 in 336ms (next.js: 3ms, proxy.ts: 310ms, application-code: 22ms)
+ GET /cv 200 in 386ms (next.js: 5ms, proxy.ts: 355ms, application-code: 27ms)
+ GET /cv 200 in 367ms (next.js: 4ms, proxy.ts: 341ms, application-code: 22ms)
+ GET /cv 200 in 339ms (next.js: 5ms, proxy.ts: 307ms, application-code: 27ms)
+ GET /cv 200 in 335ms (next.js: 5ms, proxy.ts: 307ms, application-code: 22ms)
+ GET /cv 200 in 324ms (next.js: 5ms, proxy.ts: 300ms, application-code: 19ms)
+ GET /cv 200 in 327ms (next.js: 3ms, proxy.ts: 305ms, application-code: 19ms)
+ GET /cv 200 in 418ms (next.js: 5ms, proxy.ts: 390ms, application-code: 23ms)
+ GET /cv 200 in 370ms (next.js: 6ms, proxy.ts: 345ms, application-code: 19ms)
+ GET /cv 200 in 338ms (next.js: 5ms, proxy.ts: 307ms, application-code: 26ms)
+ GET /cv 200 in 424ms (next.js: 6ms, proxy.ts: 397ms, application-code: 21ms)
+ GET /cv 200 in 339ms (next.js: 6ms, proxy.ts: 315ms, application-code: 18ms)
+ GET /cv 200 in 341ms (next.js: 4ms, proxy.ts: 313ms, application-code: 25ms)
+ GET /cv 200 in 330ms (next.js: 6ms, proxy.ts: 305ms, application-code: 19ms)
+ GET /cv 200 in 341ms (next.js: 7ms, proxy.ts: 312ms, application-code: 22ms)
+ GET /cv 200 in 320ms (next.js: 3ms, proxy.ts: 299ms, application-code: 18ms)
+ GET /cv 200 in 306ms (next.js: 1.7ms, proxy.ts: 296ms, application-code: 8ms)
+ GET /cv 200 in 314ms (next.js: 1.9ms, proxy.ts: 304ms, application-code: 8ms)
+ GET /cv 200 in 299ms (next.js: 1.9ms, proxy.ts: 288ms, application-code: 8ms)
+ GET /cv 200 in 303ms (next.js: 1.6ms, proxy.ts: 294ms, application-code: 7ms)
+ GET /cv 200 in 309ms (next.js: 1.6ms, proxy.ts: 300ms, application-code: 7ms)
+ GET /cv 200 in 311ms (next.js: 4ms, proxy.ts: 296ms, application-code: 10ms)
+ GET /cv 200 in 418ms (next.js: 3ms, proxy.ts: 407ms, application-code: 9ms)
+ GET /cv 200 in 307ms (next.js: 1.9ms, proxy.ts: 298ms, application-code: 7ms)
+ GET /cv 200 in 309ms (next.js: 1.8ms, proxy.ts: 300ms, application-code: 7ms)
+✓ Compiled in 367ms
+ GET /cv 200 in 282ms (next.js: 10ms, proxy.ts: 245ms, application-code: 27ms)
+ GET /cadastro 200 in 250ms (next.js: 45ms, proxy.ts: 13ms, application-code: 192ms)
+ GET /dashboard 200 in 302ms (next.js: 17ms, proxy.ts: 272ms, application-code: 13ms)
+ GET /dashboard 200 in 313ms (next.js: 6ms, proxy.ts: 280ms, application-code: 27ms)
+ GET /cv 200 in 215ms (next.js: 4ms, proxy.ts: 156ms, application-code: 54ms)
+ POST /api/cv 422 in 816ms (next.js: 537ms, proxy.ts: 159ms, application-code: 120ms)
+ GET /cadastro 200 in 116ms (next.js: 42ms, proxy.ts: 14ms, application-code: 60ms)
+ GET /dashboard 200 in 231ms (next.js: 9ms, proxy.ts: 210ms, application-code: 12ms)
+ GET /dashboard 200 in 168ms (next.js: 3ms, proxy.ts: 148ms, application-code: 18ms)
+ GET /cv 200 in 208ms (next.js: 10ms, proxy.ts: 153ms, application-code: 45ms)
+ POST /api/cv 422 in 206ms (next.js: 3ms, proxy.ts: 147ms, application-code: 56ms)
+ POST /api/cv 200 in 9.3s (next.js: 1.2ms, proxy.ts: 148ms, application-code: 9.2s)
+ POST /api/cv/pdf 200 in 991ms (next.js: 343ms, proxy.ts: 227ms, application-code: 421ms)
+ GET /cv 200 in 743ms (next.js: 110ms, proxy.ts: 583ms, application-code: 49ms)
