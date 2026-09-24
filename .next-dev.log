@@ -268,3 +268,4 @@ Parsing ecmascript source code failed
  GET /dashboard 200 in 379ms (next.js: 12ms, proxy.ts: 338ms, application-code: 29ms)
  GET /cv 200 in 341ms (next.js: 7ms, proxy.ts: 282ms, application-code: 53ms)
  POST /api/cv 200 in 8.6s (next.js: 14ms, proxy.ts: 331ms, application-code: 8.3s)
+✓ Compiled in 92ms
