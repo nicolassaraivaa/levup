@@ -101,12 +101,6 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (vagaModo === "texto" && !vagaTexto?.trim()) {
-    return NextResponse.json(
-      { error: "Cole a descrição da vaga." },
-      { status: 400 },
-    );
-  }
   if (vagaModo === "url" && !vagaUrl?.trim()) {
     return NextResponse.json(
       { error: "Informe a URL da vaga." },
@@ -129,8 +123,8 @@ export async function POST(req: NextRequest) {
         { status: 422 },
       );
     }
-  } else {
-    vagaDescricao = vagaTexto!.trim();
+  } else if (vagaModo === "texto" && vagaTexto?.trim()) {
+    vagaDescricao = vagaTexto.trim();
   }
 
   try {
