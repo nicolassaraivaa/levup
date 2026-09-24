@@ -246,7 +246,7 @@ export default function AuditoriaPage() {
     <div className="min-h-screen bg-background text-ink">
       <Sidebar active="/auditoria" profile={profile} />
 
-      <div className="ml-64 p-8 max-w-4xl">
+      <div className="pt-20 px-4 pb-8 md:ml-64 md:pt-8 md:px-8 max-w-4xl">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-ink flex items-center gap-2.5">
             <LinkedInIcon size={22} />

@@ -25,6 +25,23 @@ import {
 
 type VagaModo = "texto" | "url";
 
+const MAX_HISTORICO_CV = 5;
+
+interface HistoricoCV {
+  id: string;
+  created_at?: string;
+  curriculo: CurriculoGerado;
+}
+
+function formatarData(iso?: string) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 function curriculoParaTexto(c: CurriculoGerado): string {
   const linhas: string[] = [];
   linhas.push(c.nome);
@@ -73,8 +90,19 @@ export default function CVPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [curriculo, setCurriculo] = useState<CurriculoGerado | null>(null);
   const [vagaModo, setVagaModo] = useState<VagaModo>("texto");
+  const [historico, setHistorico] = useState<HistoricoCV[]>([]);
   const router = useRouter();
   const supabase = createClient();
+
+  async function carregarHistorico(userId: string) {
+    const { data } = await supabase
+      .from("cv_generations")
+      .select("id, created_at, curriculo")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(MAX_HISTORICO_CV);
+    setHistorico((data ?? []) as HistoricoCV[]);
+  }
 
   const [form, setForm] = useState({
     nome: "",
@@ -114,6 +142,7 @@ export default function CVPage() {
           email: data.email || "",
         }));
       }
+      carregarHistorico(user.id);
     }
     loadProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,11 +171,43 @@ export default function CVPage() {
       }
       setCurriculo(data.curriculo);
       setEtapa("resultado");
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data: existentes } = await supabase
+          .from("cv_generations")
+          .select("id, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true });
+
+        if (existentes && existentes.length >= MAX_HISTORICO_CV) {
+          const idsParaExcluir = existentes
+            .slice(0, existentes.length - (MAX_HISTORICO_CV - 1))
+            .map((r) => r.id);
+          if (idsParaExcluir.length > 0) {
+            await supabase.from("cv_generations").delete().in("id", idsParaExcluir);
+          }
+        }
+
+        await supabase.from("cv_generations").insert({
+          user_id: user.id,
+          curriculo: data.curriculo,
+        });
+
+        carregarHistorico(user.id);
+      }
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro inesperado.");
     } finally {
       setLoading(false);
     }
+  }
+
+  function verHistorico(item: HistoricoCV) {
+    setCurriculo(item.curriculo);
+    setEtapa("resultado");
   }
 
   function copiarCV() {
@@ -187,7 +248,7 @@ export default function CVPage() {
       <Sidebar active="/cv" profile={profile} />
 
       {/* Main */}
-      <div className="ml-64 p-8 max-w-3xl">
+      <div className="pt-20 px-4 pb-8 md:ml-64 md:pt-8 md:px-8 max-w-3xl">
         {etapa === "formulario" && (
           <div>
             <div className="mb-8">
@@ -212,7 +273,7 @@ export default function CVPage() {
                     (obrigatório)
                   </span>
                 </h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm text-ink-muted mb-1 block">
                       Nome completo
@@ -489,6 +550,39 @@ export default function CVPage() {
                 )}
               </button>
             </form>
+
+            {historico.length > 0 && (
+              <div className="mt-6 bg-surface border border-hairline rounded-2xl p-6">
+                <h3 className="font-bold text-ink mb-1">
+                  Histórico de currículos
+                </h3>
+                <p className="text-ink-faint text-xs mb-4">
+                  Os {MAX_HISTORICO_CV} currículos mais recentes gerados
+                  ficam salvos aqui.
+                </p>
+                <div className="divide-y divide-hairline">
+                  {historico.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => verHistorico(item)}
+                      className="w-full flex items-center gap-4 py-3 text-left hover:bg-surface-raised -mx-2 px-2 rounded-lg transition"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-brass-wash text-brass shrink-0">
+                        <FileText size={16} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-ink truncate">
+                          {item.curriculo?.titulo || item.curriculo?.nome || "Currículo"}
+                        </span>
+                        <span className="block text-xs text-ink-faint">
+                          {formatarData(item.created_at)}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -679,7 +773,7 @@ export default function CVPage() {
               )}
             </div>
 
-            <div className="mt-6 flex gap-4">
+            <div className="mt-6 flex flex-col sm:flex-row gap-4">
               <button
                 onClick={baixarPdf}
                 disabled={baixandoPdf}

@@ -69,6 +69,24 @@ function formatarLimiteMinutos(segundos: number) {
   return `${segundos} segundos`;
 }
 
+const MAX_HISTORICO_ENTREVISTAS = 5;
+
+interface HistoricoEntrevista {
+  id: string;
+  created_at?: string;
+  messages: RespostaEntrevista[];
+  feedback: (FeedbackEntrevista & { area?: string; nivel_alvo?: string }) | null;
+}
+
+function formatarData(iso?: string) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export default function EntrevistasPage() {
   const [etapa, setEtapa] = useState<"config" | "entrevista" | "feedback" | "cancelada">(
     "config",
@@ -86,10 +104,21 @@ export default function EntrevistasPage() {
   const [feedback, setFeedback] = useState<FeedbackEntrevista | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tempoRestante, setTempoRestante] = useState(TEMPO_LIMITE_SEGUNDOS);
+  const [historico, setHistorico] = useState<HistoricoEntrevista[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  async function carregarHistorico(userId: string) {
+    const { data } = await supabase
+      .from("interview_sessions")
+      .select("id, created_at, messages, feedback")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(MAX_HISTORICO_ENTREVISTAS);
+    setHistorico((data ?? []) as HistoricoEntrevista[]);
+  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -106,6 +135,7 @@ export default function EntrevistasPage() {
         .eq("id", user.id)
         .single();
       setProfile(data);
+      carregarHistorico(user.id);
     }
     loadProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -242,6 +272,21 @@ export default function EntrevistasPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
+      const { data: existentes } = await supabase
+        .from("interview_sessions")
+        .select("id, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      if (existentes && existentes.length >= MAX_HISTORICO_ENTREVISTAS) {
+        const idsParaExcluir = existentes
+          .slice(0, existentes.length - (MAX_HISTORICO_ENTREVISTAS - 1))
+          .map((r) => r.id);
+        if (idsParaExcluir.length > 0) {
+          await supabase.from("interview_sessions").delete().in("id", idsParaExcluir);
+        }
+      }
+
       await supabase.from("interview_sessions").insert({
         user_id: user.id,
         type: "mista",
@@ -249,6 +294,8 @@ export default function EntrevistasPage() {
         messages: respostasFinais,
         feedback: { ...data.feedback, area: areaSelecionada, nivel_alvo: nivelSelecionado },
       });
+
+      carregarHistorico(user.id);
     }
 
     setEtapa("feedback");
@@ -263,6 +310,16 @@ export default function EntrevistasPage() {
     setInputUsuario("");
     setFeedback(null);
     setTempoRestante(TEMPO_LIMITE_SEGUNDOS);
+  }
+
+  function verHistorico(item: HistoricoEntrevista) {
+    if (!item.feedback) return;
+    pararTimer();
+    setRespostas(item.messages ?? []);
+    setFeedback(item.feedback);
+    setAreaSelecionada((item.feedback.area as AreaDiagnostico) || "");
+    setNivelSelecionado((item.feedback.nivel_alvo as NivelAlvo) || "");
+    setEtapa("feedback");
   }
 
   const tecnicasRespondidas = respostas.filter((r) => r.tipo === "tecnica" && r.score != null);
@@ -286,10 +343,10 @@ export default function EntrevistasPage() {
     <div className="min-h-screen bg-background text-ink">
       <Sidebar active="/entrevistas" profile={profile} />
 
-      <div className="ml-64 flex flex-col h-screen">
+      <div className="pt-14 md:pt-0 md:ml-64 flex flex-col h-screen">
         {/* CONFIG */}
         {etapa === "config" && (
-          <div className="p-8 max-w-2xl">
+          <div className="p-4 sm:p-8 max-w-2xl">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-ink flex items-center gap-2.5">
                 <Mic size={24} className="text-brass" />
@@ -311,7 +368,7 @@ export default function EntrevistasPage() {
             <div className="space-y-6">
               <div>
                 <h3 className="text-sm font-semibold text-ink mb-3">Área técnica</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {AREAS.map((area) => (
                     <button
                       key={area.id}
@@ -336,7 +393,7 @@ export default function EntrevistasPage() {
                 <h3 className="text-sm font-semibold text-ink mb-3">
                   Nível da vaga que você busca
                 </h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {NIVEIS.map((nivel) => (
                     <button
                       key={nivel.id}
@@ -378,6 +435,47 @@ export default function EntrevistasPage() {
                 {!loading && <ArrowRight size={17} />}
               </button>
             </div>
+
+            {historico.length > 0 && (
+              <div className="mt-6 bg-surface border border-hairline rounded-2xl p-6">
+                <h3 className="font-bold text-ink mb-1">
+                  Histórico de entrevistas
+                </h3>
+                <p className="text-ink-faint text-xs mb-4">
+                  As {MAX_HISTORICO_ENTREVISTAS} entrevistas mais recentes
+                  concluídas até o fim ficam salvas aqui.
+                </p>
+                <div className="divide-y divide-hairline">
+                  {historico.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => verHistorico(item)}
+                      className="w-full flex items-center gap-4 py-3 text-left hover:bg-surface-raised -mx-2 px-2 rounded-lg transition"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-brass-wash text-brass shrink-0">
+                        <Mic size={16} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-ink truncate capitalize">
+                          {item.feedback?.area || "Entrevista"}
+                          {item.feedback?.nivel_alvo
+                            ? ` · ${NIVEIS.find((n) => n.id === item.feedback?.nivel_alvo)?.label ?? item.feedback.nivel_alvo}`
+                            : ""}
+                        </span>
+                        <span className="block text-xs text-ink-faint">
+                          {formatarData(item.created_at)} · {item.messages?.length ?? 0}{" "}
+                          perguntas
+                        </span>
+                      </span>
+                      <span className="font-mono text-sm text-brass shrink-0">
+                        {item.feedback?.score ?? "—"}
+                        <span className="text-ink-faint">/100</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -407,7 +505,7 @@ export default function EntrevistasPage() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               {respostas.map((r, i) => (
                 <div key={i} className="space-y-2">
                   <div className="flex justify-start">
@@ -506,7 +604,7 @@ export default function EntrevistasPage() {
 
         {/* CANCELADA POR TIMEOUT */}
         {etapa === "cancelada" && (
-          <div className="p-8 max-w-xl">
+          <div className="p-4 sm:p-8 max-w-xl">
             <div className="bg-surface border border-rust/30 rounded-2xl p-8 text-center">
               <div className="w-12 h-12 rounded-full bg-rust-wash text-rust flex items-center justify-center mx-auto mb-4">
                 <Timer size={22} />
@@ -525,7 +623,7 @@ export default function EntrevistasPage() {
                 {respostas.length === 1 ? "pergunta" : "perguntas"} antes do
                 tempo acabar.
               </p>
-              <div className="flex gap-4 mt-6">
+              <div className="flex flex-col sm:flex-row gap-4 mt-6">
                 <button
                   onClick={reiniciar}
                   className="flex-1 bg-surface-raised hover:bg-hairline-strong text-ink font-semibold py-3 rounded-xl transition"
@@ -545,7 +643,7 @@ export default function EntrevistasPage() {
 
         {/* FEEDBACK */}
         {etapa === "feedback" && feedback && (
-          <div className="p-8 max-w-3xl overflow-y-auto">
+          <div className="p-4 sm:p-8 max-w-3xl overflow-y-auto">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-ink flex items-center gap-2.5">
                 <BarChart3 size={24} className="text-brass" />
@@ -632,7 +730,7 @@ export default function EntrevistasPage() {
               </ul>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={reiniciar}
                 className="flex-1 bg-brass hover:bg-brass-strong text-background font-semibold py-3 rounded-xl transition"

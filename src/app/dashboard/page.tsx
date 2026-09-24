@@ -240,7 +240,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background text-ink">
       <Sidebar active="/dashboard" profile={profile} />
 
-      <div className="ml-64 p-8 max-w-5xl">
+      <div className="pt-20 px-4 pb-8 md:ml-64 md:pt-8 md:px-8 max-w-5xl">
         <div className="mb-8">
           <h2 className="text-2xl font-semibold text-ink">
             Olá, {profile?.name?.split(" ")[0] || "desenvolvedor"}

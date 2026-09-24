@@ -18,7 +18,7 @@ const STAGES = [
   {
     index: "03",
     tag: "auditoria",
-    title: "Audite LinkedIn, GitHub e CV",
+    title: "Audite seu perfil do LinkedIn",
     icon: SearchCheck,
   },
   {

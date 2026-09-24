@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Target,
@@ -9,6 +10,8 @@ import {
   SearchCheck,
   FileText,
   LogOut,
+  Menu,
+  X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
@@ -28,6 +31,7 @@ export default function Sidebar({
   active: (typeof NAV_ITEMS)[number]["href"];
   profile: Profile | null;
 }) {
+  const [open, setOpen] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -36,8 +40,8 @@ export default function Sidebar({
     router.push("/login");
   }
 
-  return (
-    <div className="fixed left-0 top-0 h-full w-64 bg-surface border-r border-hairline flex flex-col">
+  const conteudo = (
+    <>
       <div className="p-6 border-b border-hairline">
         <h1 className="text-lg font-semibold tracking-tight text-ink">
           LevUp
@@ -45,13 +49,14 @@ export default function Sidebar({
         <p className="text-ink-faint text-xs mt-1">Acelere sua carreira</p>
       </div>
 
-      <nav className="flex-1 p-3 space-y-0.5">
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive = href === active;
           return (
             <Link
               key={href}
               href={href}
+              onClick={() => setOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition ${
                 isActive
                   ? "bg-brass-wash text-brass font-medium"
@@ -87,6 +92,52 @@ export default function Sidebar({
           Sair
         </button>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Barra superior — mobile */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface border-b border-hairline flex items-center justify-between px-4 z-40">
+        <button
+          onClick={() => setOpen(true)}
+          className="text-ink-muted hover:text-ink transition p-1 -ml-1"
+          aria-label="Abrir menu"
+        >
+          <Menu size={22} />
+        </button>
+        <span className="text-base font-semibold tracking-tight text-ink">
+          LevUp
+        </span>
+        <div className="w-7 h-7 rounded-full bg-brass-wash flex items-center justify-center text-[11px] font-semibold text-brass shrink-0">
+          {profile?.name?.[0]?.toUpperCase() || "U"}
+        </div>
+      </div>
+
+      {/* Drawer — mobile */}
+      {open && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setOpen(false)}
+          />
+          <div className="relative w-64 max-w-[80vw] h-full bg-surface border-r border-hairline flex flex-col">
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute top-4 right-4 text-ink-faint hover:text-ink transition"
+              aria-label="Fechar menu"
+            >
+              <X size={20} />
+            </button>
+            {conteudo}
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar fixa — desktop */}
+      <div className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-surface border-r border-hairline flex-col">
+        {conteudo}
+      </div>
+    </>
   );
 }

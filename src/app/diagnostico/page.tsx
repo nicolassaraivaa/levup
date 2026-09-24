@@ -233,7 +233,7 @@ export default function DiagnosticoPage() {
     <div className="min-h-screen bg-background text-ink">
       <Sidebar active="/diagnostico" profile={profile} />
 
-      <div className="ml-64 p-8 max-w-3xl">
+      <div className="pt-20 px-4 pb-8 md:ml-64 md:pt-8 md:px-8 max-w-3xl">
         {etapa === "selecao" && (
           <div>
             <div className="mb-8">
@@ -259,7 +259,7 @@ export default function DiagnosticoPage() {
             <h3 className="text-sm font-semibold text-ink mb-3">
               Área técnica
             </h3>
-            <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
               {AREAS.map((area) => (
                 <button
                   key={area.id}
@@ -282,7 +282,7 @@ export default function DiagnosticoPage() {
             <h3 className="text-sm font-semibold text-ink mb-3">
               Nível da vaga que você busca
             </h3>
-            <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               {NIVEIS.map((nivel) => (
                 <button
                   key={nivel.id}
@@ -508,7 +508,7 @@ export default function DiagnosticoPage() {
               </div>
             )}
 
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={reiniciar}
                 className="flex-1 bg-surface-raised hover:bg-hairline-strong text-ink font-semibold py-3 rounded-xl transition"
