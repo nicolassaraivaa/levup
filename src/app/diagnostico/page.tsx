@@ -18,6 +18,7 @@ import {
   Settings,
   Rocket,
   Smartphone,
+  Database,
   Loader2,
   BarChart3,
   FileText,
@@ -65,6 +66,12 @@ const AREAS: { id: AreaDiagnostico; label: string; icon: typeof Palette; desc: s
     label: "Mobile",
     icon: Smartphone,
     desc: "React Native, Flutter",
+  },
+  {
+    id: "dados",
+    label: "Dados",
+    icon: Database,
+    desc: "SQL, Python, BI e pipelines",
   },
 ];
 
@@ -264,7 +271,7 @@ export default function DiagnosticoPage() {
                 <button
                   key={area.id}
                   onClick={() => setAreaSelecionada(area.id)}
-                  className={`p-5 rounded-2xl border text-left transition ${
+                  className={`p-5 rounded-2xl border text-left transition sm:last:odd:col-span-2 ${
                     areaSelecionada === area.id
                       ? "border-brass bg-brass-wash"
                       : "border-hairline bg-surface hover:border-hairline-strong"

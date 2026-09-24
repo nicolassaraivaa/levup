@@ -8,8 +8,6 @@ import {
   User,
   Mail,
   Lock,
-  Compass,
-  ChevronDown,
   ArrowRight,
   AlertCircle,
 } from "lucide-react";
@@ -19,7 +17,6 @@ export default function CadastroPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [area, setArea] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -43,7 +40,6 @@ export default function CadastroPage() {
         id: data.user.id,
         name,
         email,
-        area,
       });
     }
 
@@ -116,35 +112,6 @@ export default function CadastroPage() {
               placeholder="••••••••"
               required
               className="w-full bg-surface border border-hairline-strong rounded-md pl-10 pr-4 py-3 text-sm text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="text-sm text-ink-muted mb-1.5 block">
-            Área de interesse
-          </label>
-          <div className="relative">
-            <Compass
-              size={16}
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
-            />
-            <select
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              required
-              className="w-full appearance-none bg-surface border border-hairline-strong rounded-md pl-10 pr-4 py-3 text-sm text-ink focus:outline-none focus:border-brass transition"
-            >
-              <option value="">Selecione sua área</option>
-              <option value="frontend">Frontend</option>
-              <option value="backend">Backend</option>
-              <option value="fullstack">Full Stack</option>
-              <option value="mobile">Mobile</option>
-              <option value="dados">Dados</option>
-            </select>
-            <ChevronDown
-              size={16}
-              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
             />
           </div>
         </div>

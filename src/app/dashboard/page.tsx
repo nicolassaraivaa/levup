@@ -220,7 +220,7 @@ export default function DashboardPage() {
       const res = await fetch("/api/dashboard/cursos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ area: profile?.area ?? null, gaps: gapsUnicos }),
+        body: JSON.stringify({ area: ultimoDiagnostico?.area ?? null, gaps: gapsUnicos }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

@@ -1,4 +1,4 @@
-export type AreaDiagnostico = "frontend" | "backend" | "fullstack" | "mobile";
+export type AreaDiagnostico = "frontend" | "backend" | "fullstack" | "mobile" | "dados";
 export type NivelAlvo = "estagio" | "junior" | "pleno";
 
 export const NIVEL_LABEL: Record<NivelAlvo, string> = {
@@ -81,6 +81,24 @@ export const CATEGORIAS: Record<AreaDiagnostico, string[]> = {
     "Publicação nas lojas (build, versionamento)",
     "Testes em aplicações mobile",
     "Boas práticas e organização de código",
+    "Git e fluxo de trabalho colaborativo",
+  ],
+  dados: [
+    "SQL: consultas, joins e agregações",
+    "SQL avançado: window functions e CTEs",
+    "Modelagem de dados e normalização",
+    "Python para dados: Pandas e NumPy",
+    "Limpeza e tratamento de dados",
+    "Estatística descritiva",
+    "Probabilidade e inferência estatística",
+    "Visualização de dados e dashboards",
+    "ETL e pipelines de dados",
+    "Data warehouse e modelagem dimensional",
+    "Ferramentas de BI (Power BI, Looker, Metabase)",
+    "Fundamentos de machine learning",
+    "Avaliação de modelos e métricas",
+    "Qualidade e governança de dados",
+    "Comunicação de insights para o negócio",
     "Git e fluxo de trabalho colaborativo",
   ],
 };

@@ -36,6 +36,7 @@ export async function proxy(request: NextRequest) {
     "/entrevistas",
     "/auditoria",
     "/cv",
+    "/configuracoes",
   ];
   const isProtected = protectedRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route),

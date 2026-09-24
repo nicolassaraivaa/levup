@@ -19,6 +19,7 @@ import {
   Settings,
   Rocket,
   Smartphone,
+  Database,
   Timer,
   BarChart3,
   FileText,
@@ -47,6 +48,7 @@ const AREAS: { id: AreaDiagnostico; label: string; icon: typeof Palette; desc: s
   { id: "backend", label: "Backend", icon: Settings, desc: "Node.js, APIs, Banco de dados" },
   { id: "fullstack", label: "Full Stack", icon: Rocket, desc: "Frontend + Backend" },
   { id: "mobile", label: "Mobile", icon: Smartphone, desc: "React Native, Flutter" },
+  { id: "dados", label: "Dados", icon: Database, desc: "SQL, Python, BI e pipelines" },
 ];
 
 const NIVEIS: { id: NivelAlvo; label: string; desc: string }[] = [
@@ -373,7 +375,7 @@ export default function EntrevistasPage() {
                     <button
                       key={area.id}
                       onClick={() => setAreaSelecionada(area.id)}
-                      className={`p-4 rounded-xl border text-left transition ${
+                      className={`p-4 rounded-xl border text-left transition sm:last:odd:col-span-2 ${
                         areaSelecionada === area.id
                           ? "border-brass bg-brass-wash"
                           : "border-hairline bg-surface hover:border-hairline-strong"

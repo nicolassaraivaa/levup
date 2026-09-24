@@ -9,12 +9,14 @@ import {
   Mic,
   SearchCheck,
   FileText,
+  Settings,
   LogOut,
   Menu,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
+import Logo from "@/components/Logo";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -22,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/entrevistas", label: "Simulador de Entrevistas", icon: Mic },
   { href: "/auditoria", label: "Auditoria de LinkedIn", icon: SearchCheck },
   { href: "/cv", label: "Gerador de CV", icon: FileText },
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
 export default function Sidebar({
@@ -43,10 +46,10 @@ export default function Sidebar({
   const conteudo = (
     <>
       <div className="p-6 border-b border-hairline">
-        <h1 className="text-lg font-semibold tracking-tight text-ink">
-          LevUp
-        </h1>
-        <p className="text-ink-faint text-xs mt-1">Acelere sua carreira</p>
+        <Link href="/dashboard" onClick={() => setOpen(false)} className="inline-block">
+          <Logo />
+        </Link>
+        <p className="text-ink-faint text-xs mt-2">Acelere sua carreira</p>
       </div>
 
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
@@ -71,7 +74,11 @@ export default function Sidebar({
       </nav>
 
       <div className="p-3 border-t border-hairline">
-        <div className="flex items-center gap-3 px-2 py-2">
+        <Link
+          href="/configuracoes"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-2 py-2 rounded-md transition hover:bg-surface-raised"
+        >
           <div className="w-8 h-8 rounded-full bg-brass-wash flex items-center justify-center text-xs font-semibold text-brass shrink-0">
             {profile?.name?.[0]?.toUpperCase() || "U"}
           </div>
@@ -80,10 +87,10 @@ export default function Sidebar({
               {profile?.name || "Usuário"}
             </p>
             <p className="text-xs text-ink-faint truncate">
-              {profile?.area || ""}
+              {profile?.email || ""}
             </p>
           </div>
-        </div>
+        </Link>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-2 text-sm text-ink-faint hover:text-ink transition px-2 py-2 mt-1 rounded-md hover:bg-surface-raised"
@@ -106,9 +113,9 @@ export default function Sidebar({
         >
           <Menu size={22} />
         </button>
-        <span className="text-base font-semibold tracking-tight text-ink">
-          LevUp
-        </span>
+        <Link href="/dashboard">
+          <Logo size={24} textClassName="text-base" />
+        </Link>
         <div className="w-7 h-7 rounded-full bg-brass-wash flex items-center justify-center text-[11px] font-semibold text-brass shrink-0">
           {profile?.name?.[0]?.toUpperCase() || "U"}
         </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Target, Mic, SearchCheck, FileText } from "lucide-react";
 import type { ReactNode } from "react";
+import Logo from "@/components/Logo";
 
 const STAGES = [
   {
@@ -35,10 +36,10 @@ export default function AuthShell({ children }: { children: ReactNode }) {
       <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-16">
         <Link
           href="/"
-          className="mb-10 inline-flex w-fit items-center gap-2 text-sm font-medium text-ink-faint transition hover:text-ink"
+          className="group mb-10 inline-flex w-fit items-center gap-2.5 text-ink-faint transition hover:text-ink"
         >
-          <ArrowLeft size={14} />
-          LevUp
+          <ArrowLeft size={14} className="transition group-hover:-translate-x-0.5" />
+          <Logo size={26} textClassName="text-base" />
         </Link>
         <div className="w-full max-w-sm">{children}</div>
       </div>

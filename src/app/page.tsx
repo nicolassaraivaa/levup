@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Target, Mic, SearchCheck, FileText } from "lucide-react";
+import Logo from "@/components/Logo";
 
 const PIPELINE = [
   {
@@ -7,7 +8,7 @@ const PIPELINE = [
     tag: "diagnóstico",
     title: "Descubra seus gaps antes do recrutador",
     description:
-      "Um quiz técnico adaptativo na sua área — frontend, backend, full stack ou mobile — que aponta exatamente onde estudar antes de aplicar.",
+      "Um quiz técnico adaptativo na sua área — frontend, backend, full stack, mobile ou dados — que aponta exatamente onde estudar antes de aplicar.",
     icon: Target,
     href: "/diagnostico",
   },
@@ -57,9 +58,9 @@ export default function Home() {
     <div className="flex-1 bg-background text-ink">
       <header className="border-b border-hairline">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5 sm:px-10">
-          <span className="text-lg font-semibold tracking-tight text-ink">
-            LevUp
-          </span>
+          <Link href="/">
+            <Logo />
+          </Link>
           <nav className="flex items-center gap-6 text-sm">
             <Link
               href="/login"
