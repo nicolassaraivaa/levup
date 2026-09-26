@@ -1,4 +1,5 @@
-import { anthropic } from "@/lib/anthropic";
+import { gerarJson } from "@/lib/anthropic";
+import { exigirUsuario } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
@@ -13,6 +14,9 @@ const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
 type Modo = "texto" | "imagem" | "pdf";
 
 export async function POST(req: NextRequest) {
+  const { erro } = await exigirUsuario();
+  if (erro) return erro;
+
   const { objetivo, modo, texto, arquivo } = (await req.json()) as {
     objetivo: string;
     modo: Modo;
@@ -128,31 +132,14 @@ Responda APENAS em JSON válido, sem markdown, com essa estrutura exata:
   "acoes": ["próximo passo recomendado 1", "próximo passo recomendado 2", "próximo passo recomendado 3"]
 }`;
 
-    let analise: unknown = null;
-    let erroParse: unknown = null;
-
-    for (let tentativa = 0; tentativa < 2 && !analise; tentativa++) {
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-5",
+    const analise = await gerarJson(
+      {
         max_tokens: 8192,
         system: systemPrompt,
         messages: [{ role: "user", content }],
-      });
-
-      const text =
-        message.content[0].type === "text" ? message.content[0].text : "{}";
-      try {
-        analise = JSON.parse(text.replace(/```json|```/g, "").trim());
-      } catch (parseError) {
-        erroParse = parseError;
-        console.error(
-          `Auditoria de LinkedIn: JSON inválido na tentativa ${tentativa + 1}, tentando de novo.`,
-          parseError,
-        );
-      }
-    }
-
-    if (!analise) throw erroParse ?? new Error("Resposta da IA em formato inválido.");
+      },
+      "Auditoria de LinkedIn",
+    );
 
     return NextResponse.json({ analise });
   } catch (error) {

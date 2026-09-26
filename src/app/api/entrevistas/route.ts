@@ -1,10 +1,18 @@
-import { anthropic } from "@/lib/anthropic";
+import { gerarJson } from "@/lib/anthropic";
+import { exigirUsuario } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import type { RespostaEntrevista } from "@/lib/types";
-import { NIVEL_LABEL, type AreaDiagnostico, type NivelAlvo } from "@/lib/diagnostico";
+import {
+  NIVEL_LABEL,
+  type AreaDiagnostico,
+  type NivelAlvo,
+} from "@/lib/diagnostico";
 import { deveContinuarEntrevista } from "@/lib/entrevista";
 
 export async function POST(req: NextRequest) {
+  const { erro } = await exigirUsuario();
+  if (erro) return erro;
+
   const { area, nivel, etapa, respostas, tema, tipo } = (await req.json()) as {
     area: AreaDiagnostico;
     nivel: NivelAlvo;
@@ -25,10 +33,13 @@ export async function POST(req: NextRequest) {
         : true;
       const pedirProximaPergunta = !anterior || continuar;
 
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-5",
-        max_tokens: 512,
-        system: `Você é um entrevistador de tecnologia conduzindo, em português, uma entrevista para uma vaga de ${area} nível ${nivelLabel}. A entrevista mistura perguntas técnicas e comportamentais, como uma entrevista real de verdade — nunca revele que você é uma IA.
+      const data = await gerarJson<{
+        score_ultima_resposta: number | null;
+        pergunta?: string;
+      }>(
+        {
+          max_tokens: 512,
+          system: `Você é um entrevistador de tecnologia conduzindo, em português, uma entrevista para uma vaga de ${area} nível ${nivelLabel}. A entrevista mistura perguntas técnicas e comportamentais, como uma entrevista real de verdade — nunca revele que você é uma IA.
 
 ${
   anterior
@@ -56,31 +67,34 @@ Regras da próxima pergunta:
 
 Responda APENAS em JSON válido, sem markdown:
 { "score_ultima_resposta": ${anterior ? "número de 0 a 100" : "null"}${pedirProximaPergunta ? `, "pergunta": "a pergunta em português"` : ""} }`,
-        messages: [
-          ...respostas
-            .map((r) => [
-              { role: "assistant" as const, content: r.pergunta },
-              { role: "user" as const, content: r.resposta },
-            ])
-            .flat(),
-          {
-            role: "user",
-            content: anterior ? "Continue a entrevista." : "Comece a entrevista.",
-          },
-        ],
-      });
-
-      const text =
-        message.content[0].type === "text" ? message.content[0].text : "{}";
-      const data = JSON.parse(text.replace(/```json|```/g, "").trim());
+          messages: [
+            ...respostas
+              .map((r) => [
+                { role: "assistant" as const, content: r.pergunta },
+                { role: "user" as const, content: r.resposta },
+              ])
+              .flat(),
+            {
+              role: "user",
+              content: anterior
+                ? "Continue a entrevista."
+                : "Comece a entrevista.",
+            },
+          ],
+        },
+        "Entrevista",
+        (d) =>
+          !pedirProximaPergunta ||
+          (typeof d.pergunta === "string" && d.pergunta.trim() !== ""),
+      );
       return NextResponse.json({ ...data, finalizado: !pedirProximaPergunta });
     }
 
     if (etapa === "feedback") {
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-5",
-        max_tokens: 2048,
-        system: `Você é um especialista em recrutamento e desenvolvimento de carreira para desenvolvedores de ${area}, nível ${nivelLabel}.
+      const feedback = await gerarJson<{ score: number }>(
+        {
+          max_tokens: 2048,
+          system: `Você é um especialista em recrutamento e desenvolvimento de carreira para desenvolvedores de ${area}, nível ${nivelLabel}.
 
 Analise a entrevista completa (perguntas técnicas e comportamentais, com as respostas do candidato e a nota que cada uma já recebeu) e gere um feedback consolidado, em português.
 
@@ -93,22 +107,21 @@ Responda APENAS em JSON válido com essa estrutura:
   "resumo": "parágrafo com avaliação geral do candidato, mencionando tanto o lado técnico quanto o comportamental",
   "dicas": ["dica 1", "dica 2", "dica 3"]
 }`,
-        messages: [
-          {
-            role: "user",
-            content: `Entrevista de ${area}, nível alvo ${nivelLabel}:\n\n${respostas
-              .map(
-                (r, i) =>
-                  `${i + 1}. [${r.tipo} — ${r.tema}] (nota: ${r.score ?? "N/A"})\nQ: ${r.pergunta}\nA: ${r.resposta}`,
-              )
-              .join("\n\n")}\n\nGere o feedback final.`,
-          },
-        ],
-      });
-
-      const text =
-        message.content[0].type === "text" ? message.content[0].text : "{}";
-      const feedback = JSON.parse(text.replace(/```json|```/g, "").trim());
+          messages: [
+            {
+              role: "user",
+              content: `Entrevista de ${area}, nível alvo ${nivelLabel}:\n\n${respostas
+                .map(
+                  (r, i) =>
+                    `${i + 1}. [${r.tipo} — ${r.tema}] (nota: ${r.score ?? "N/A"})\nQ: ${r.pergunta}\nA: ${r.resposta}`,
+                )
+                .join("\n\n")}\n\nGere o feedback final.`,
+            },
+          ],
+        },
+        "Feedback de entrevista",
+        (f) => typeof f.score === "number",
+      );
       return NextResponse.json({ feedback });
     }
 
@@ -116,7 +129,10 @@ Responda APENAS em JSON válido com essa estrutura:
   } catch (error) {
     console.error("Erro na API de entrevistas:", error);
     return NextResponse.json(
-      { error: "Não foi possível continuar a entrevista. Tente novamente em instantes." },
+      {
+        error:
+          "Não foi possível continuar a entrevista. Tente novamente em instantes.",
+      },
       { status: 502 },
     );
   }

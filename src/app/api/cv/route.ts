@@ -1,9 +1,10 @@
-import { anthropic } from "@/lib/anthropic";
+import { gerarJson } from "@/lib/anthropic";
+import { exigirUsuario } from "@/lib/auth";
+import { buscarUrlPublica } from "@/lib/buscarUrlPublica";
 import { NextRequest, NextResponse } from "next/server";
 
 type VagaModo = "texto" | "url";
 
-const BLOQUEADOS = ["localhost", "127.0.0.1", "0.0.0.0", "::1"];
 const LIMITE_TEXTO_VAGA = 8000;
 
 function extrairTextoHtml(html: string): string {
@@ -23,46 +24,20 @@ function extrairTextoHtml(html: string): string {
 }
 
 async function buscarTextoDaVaga(url: string): Promise<string> {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error("URL inválida.");
+  const html = await buscarUrlPublica(url);
+  const texto = extrairTextoHtml(html).slice(0, LIMITE_TEXTO_VAGA);
+  if (texto.length < 200) {
+    throw new Error(
+      "Não consegui extrair a descrição da vaga dessa URL (a página pode carregar o conteúdo via JavaScript). Cole o texto da vaga manualmente.",
+    );
   }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("URL inválida.");
-  }
-  if (BLOQUEADOS.includes(parsed.hostname) || parsed.hostname.endsWith(".local")) {
-    throw new Error("URL inválida.");
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const res = await fetch(parsed, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; LevUpBot/1.0; +https://levup.app)",
-      },
-    });
-    if (!res.ok) {
-      throw new Error("Não foi possível acessar essa URL.");
-    }
-    const html = await res.text();
-    const texto = extrairTextoHtml(html).slice(0, LIMITE_TEXTO_VAGA);
-    if (texto.length < 200) {
-      throw new Error(
-        "Não consegui extrair a descrição da vaga dessa URL (a página pode carregar o conteúdo via JavaScript). Cole o texto da vaga manualmente.",
-      );
-    }
-    return texto;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return texto;
 }
 
 export async function POST(req: NextRequest) {
+  const { erro } = await exigirUsuario();
+  if (erro) return erro;
+
   const {
     nome,
     email,
@@ -197,31 +172,14 @@ Idiomas: ${idiomas?.trim() || "não informado"}
 
 Gere o currículo completo em JSON conforme a estrutura pedida.`;
 
-    let curriculo: unknown = null;
-    let erroParse: unknown = null;
-
-    for (let tentativa = 0; tentativa < 2 && !curriculo; tentativa++) {
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-5",
+    const curriculo = await gerarJson(
+      {
         max_tokens: 4096,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
-      });
-
-      const text =
-        message.content[0].type === "text" ? message.content[0].text : "{}";
-      try {
-        curriculo = JSON.parse(text.replace(/```json|```/g, "").trim());
-      } catch (parseError) {
-        erroParse = parseError;
-        console.error(
-          `Gerador de CV: JSON inválido na tentativa ${tentativa + 1}, tentando de novo.`,
-          parseError,
-        );
-      }
-    }
-
-    if (!curriculo) throw erroParse ?? new Error("Resposta da IA em formato inválido.");
+      },
+      "Gerador de CV",
+    );
 
     return NextResponse.json({ curriculo });
   } catch (error) {

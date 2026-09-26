@@ -1,9 +1,17 @@
-import { anthropic } from "@/lib/anthropic";
+import { anthropic, gerarJson, MODELO } from "@/lib/anthropic";
+import { exigirUsuario } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import type { RespostaDiagnostico } from "@/lib/types";
-import { NIVEL_LABEL, type AreaDiagnostico, type NivelAlvo } from "@/lib/diagnostico";
+import type { RespostaDiagnostico, ResultadoDiagnostico } from "@/lib/types";
+import {
+  NIVEL_LABEL,
+  type AreaDiagnostico,
+  type NivelAlvo,
+} from "@/lib/diagnostico";
 
 export async function POST(req: NextRequest) {
+  const { erro } = await exigirUsuario();
+  if (erro) return erro;
+
   const { area, nivel, etapa, respostas, categoria } = (await req.json()) as {
     area: AreaDiagnostico;
     nivel: NivelAlvo;
@@ -17,7 +25,7 @@ export async function POST(req: NextRequest) {
   try {
     if (etapa === "pergunta") {
       const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-5",
+        model: MODELO,
         max_tokens: 512,
         system: `Você é um avaliador técnico especializado em ${area}, entrevistando candidatos para vagas de nível ${nivelLabel}.
 
@@ -52,10 +60,10 @@ Regras:
     }
 
     if (etapa === "resultado") {
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-5",
-        max_tokens: 3072,
-        system: `Você é um avaliador técnico sênior especializado em ${area}, avaliando candidatos para vagas de nível ${nivelLabel}.
+      const resultado = await gerarJson<ResultadoDiagnostico>(
+        {
+          max_tokens: 3072,
+          system: `Você é um avaliador técnico sênior especializado em ${area}, avaliando candidatos para vagas de nível ${nivelLabel}.
 
 Você recebeu um diagnóstico estruturado com ${respostas.length} perguntas. Algumas competências podem ter sido perguntadas mais de uma vez (isso acontece quando o candidato já mostrou fragilidade nesse tema em diagnósticos anteriores, e o sistema aprofunda a checagem). Avalie CADA resposta individualmente considerando o nível ${nivelLabel} como referência, e depois consolide o resultado geral.
 
@@ -72,22 +80,21 @@ Responda APENAS em JSON válido com essa estrutura exata:
   "proxima_acao": "uma frase recomendando o próximo passo concreto do candidato dentro da plataforma (ex: praticar entrevista, revisar tema X)",
   "resumo": "parágrafo resumindo o desempenho do candidato, mencionando se o nível percebido está alinhado ao nível alvo (${nivelLabel})"
 }`,
-        messages: [
-          {
-            role: "user",
-            content: `Diagnóstico de ${area} — nível alvo: ${nivelLabel}\n\n${respostas
-              .map(
-                (r, i) =>
-                  `${i + 1}. [${r.categoria}]\nPergunta: ${r.pergunta}\nResposta do candidato: ${r.resposta}`,
-              )
-              .join("\n\n")}\n\nGere o relatório final.`,
-          },
-        ],
-      });
-
-      const text =
-        message.content[0].type === "text" ? message.content[0].text : "{}";
-      const resultado = JSON.parse(text.replace(/```json|```/g, "").trim());
+          messages: [
+            {
+              role: "user",
+              content: `Diagnóstico de ${area} — nível alvo: ${nivelLabel}\n\n${respostas
+                .map(
+                  (r, i) =>
+                    `${i + 1}. [${r.categoria}]\nPergunta: ${r.pergunta}\nResposta do candidato: ${r.resposta}`,
+                )
+                .join("\n\n")}\n\nGere o relatório final.`,
+            },
+          ],
+        },
+        "Diagnóstico",
+        (r) => typeof r.score === "number" && Array.isArray(r.categorias),
+      );
       return NextResponse.json({ resultado });
     }
 
@@ -95,7 +102,10 @@ Responda APENAS em JSON válido com essa estrutura exata:
   } catch (error) {
     console.error("Erro na API de diagnóstico:", error);
     return NextResponse.json(
-      { error: "Não foi possível gerar o diagnóstico. Tente novamente em instantes." },
+      {
+        error:
+          "Não foi possível gerar o diagnóstico. Tente novamente em instantes.",
+      },
       { status: 502 },
     );
   }

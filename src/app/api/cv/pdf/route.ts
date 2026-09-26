@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { CurriculoDocument } from "@/lib/pdf/CurriculoDocument";
 import type { CurriculoGerado } from "@/lib/types";
+import { exigirUsuario } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
+  const { erro } = await exigirUsuario();
+  if (erro) return erro;
+
   try {
     const { curriculo } = (await req.json()) as { curriculo: CurriculoGerado };
     if (!curriculo?.nome) {

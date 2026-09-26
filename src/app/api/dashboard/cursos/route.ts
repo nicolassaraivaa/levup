@@ -1,7 +1,11 @@
-import { anthropic } from "@/lib/anthropic";
+import { gerarJson } from "@/lib/anthropic";
+import { exigirUsuario } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
+  const { erro } = await exigirUsuario();
+  if (erro) return erro;
+
   const { area, gaps } = (await req.json()) as {
     area: string | null;
     gaps: string[];
@@ -12,10 +16,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 1536,
-      system: `Você é um mentor de carreira tech que recomenda o que estudar a seguir para desenvolvedores júnior de ${area || "tecnologia"}.
+    const data = await gerarJson<{ sugestoes: unknown[] }>(
+      {
+        max_tokens: 1536,
+        system: `Você é um mentor de carreira tech que recomenda o que estudar a seguir para desenvolvedores júnior de ${area || "tecnologia"}.
 
 Você recebeu uma lista de dificuldades identificadas em diagnósticos técnicos, auditorias de perfil (LinkedIn, GitHub, currículo) e simulações de entrevista desse candidato. Agrupe dificuldades relacionadas entre si e sugira de 3 a 5 temas de estudo objetivos, dos mais urgentes para os menos urgentes.
 
@@ -30,24 +34,26 @@ Responda APENAS em JSON válido com essa estrutura:
     { "tema": "nome objetivo do tema de estudo", "motivo": "uma frase conectando ao que foi identificado nas avaliações", "onde_estudar": ["nome 1", "nome 2"] }
   ]
 }`,
-      messages: [
-        {
-          role: "user",
-          content: `Dificuldades identificadas nas avaliações do candidato:\n${gaps
-            .map((g) => `- ${g}`)
-            .join("\n")}\n\nGere as sugestões de estudo.`,
-        },
-      ],
-    });
-
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "{}";
-    const data = JSON.parse(text.replace(/```json|```/g, "").trim());
+        messages: [
+          {
+            role: "user",
+            content: `Dificuldades identificadas nas avaliações do candidato:\n${gaps
+              .map((g) => `- ${g}`)
+              .join("\n")}\n\nGere as sugestões de estudo.`,
+          },
+        ],
+      },
+      "Sugestões de estudo",
+      (d) => Array.isArray(d.sugestoes),
+    );
     return NextResponse.json(data);
   } catch (error) {
     console.error("Erro ao gerar sugestões de curso:", error);
     return NextResponse.json(
-      { error: "Não foi possível gerar sugestões agora. Tente novamente em instantes." },
+      {
+        error:
+          "Não foi possível gerar sugestões agora. Tente novamente em instantes.",
+      },
       { status: 502 },
     );
   }
