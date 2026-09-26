@@ -27,7 +27,11 @@ export default function CadastroPage() {
     setLoading(true);
     setError("");
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
+    });
 
     if (error) {
       setError("Erro ao criar conta: " + error.message);
