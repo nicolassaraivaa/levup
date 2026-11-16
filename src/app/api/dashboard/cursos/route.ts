@@ -1,4 +1,4 @@
-import { gerarJson } from "@/lib/anthropic";
+import { gerarJson, REGRA_CONTEUDO_DO_CANDIDATO } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import { lerCorpo, validarEntradaCursos } from "@/lib/validacaoEntrada";
 import { NextRequest, NextResponse } from "next/server";
@@ -35,7 +35,9 @@ Responda APENAS em JSON válido com essa estrutura:
   "sugestoes": [
     { "tema": "nome objetivo do tema de estudo", "motivo": "uma frase conectando ao que foi identificado nas avaliações", "onde_estudar": ["nome 1", "nome 2"] }
   ]
-}`,
+}
+
+${REGRA_CONTEUDO_DO_CANDIDATO}`,
         messages: [
           {
             role: "user",

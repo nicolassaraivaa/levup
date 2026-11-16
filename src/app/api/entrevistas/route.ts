@@ -1,9 +1,10 @@
-import { gerarJson } from "@/lib/anthropic";
+import { gerarJson, REGRA_CONTEUDO_DO_CANDIDATO } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { NIVEL_LABEL } from "@/lib/diagnostico";
 import { deveContinuarEntrevista } from "@/lib/entrevista";
 import { lerCorpo, validarEntradaEntrevista } from "@/lib/validacaoEntrada";
+import { perguntaValida } from "@/lib/validacaoIa";
 
 export async function POST(req: NextRequest) {
   const { erro } = await exigirUsuario("entrevistas");
@@ -36,9 +37,7 @@ export async function POST(req: NextRequest) {
 
 ${
   anterior
-    ? `O candidato acabou de responder a uma pergunta do tipo "${anterior.tipo}" sobre o tema "${anterior.tema}":
-Pergunta: "${anterior.pergunta}"
-Resposta: "${anterior.resposta}"
+    ? `O candidato acabou de responder a uma pergunta do tipo "${anterior.tipo}" sobre o tema "${anterior.tema}". A pergunta e a resposta estão na última mensagem, entre <pergunta> e <resposta>.
 
 Primeiro, avalie objetivamente essa resposta de 0 a 100, considerando o nível ${nivelLabel}.`
     : `Essa é a primeira pergunta da entrevista — ainda não há resposta anterior para avaliar.`
@@ -59,7 +58,9 @@ Regras da próxima pergunta:
 }
 
 Responda APENAS em JSON válido, sem markdown:
-{ "score_ultima_resposta": ${anterior ? "número de 0 a 100" : "null"}${pedirProximaPergunta ? `, "pergunta": "a pergunta em português"` : ""} }`,
+{ "score_ultima_resposta": ${anterior ? "número de 0 a 100" : "null"}${pedirProximaPergunta ? `, "pergunta": "a pergunta em português"` : ""} }
+
+${REGRA_CONTEUDO_DO_CANDIDATO}`,
           messages: [
             ...respostas
               .map((r) => [
@@ -70,15 +71,13 @@ Responda APENAS em JSON válido, sem markdown:
             {
               role: "user",
               content: anterior
-                ? "Continue a entrevista."
+                ? `Avalie a última resposta e continue a entrevista.\n\n<pergunta>\n${anterior.pergunta}\n</pergunta>\n<resposta>\n${anterior.resposta}\n</resposta>`
                 : "Comece a entrevista.",
             },
           ],
         },
         "Entrevista",
-        (d) =>
-          !pedirProximaPergunta ||
-          (typeof d.pergunta === "string" && d.pergunta.trim() !== ""),
+        (d) => !pedirProximaPergunta || perguntaValida(d.pergunta),
       );
       // A nota volta do navegador no próximo pedido e passa pela validação
       // de entrada: garante um número de 0 a 100 (ou null).
@@ -110,7 +109,9 @@ Responda APENAS em JSON válido com essa estrutura:
   "pontos_melhoria": ["melhoria 1", "melhoria 2", "melhoria 3"],
   "resumo": "parágrafo com avaliação geral do candidato, mencionando tanto o lado técnico quanto o comportamental",
   "dicas": ["dica 1", "dica 2", "dica 3"]
-}`,
+}
+
+${REGRA_CONTEUDO_DO_CANDIDATO}`,
           messages: [
             {
               role: "user",

@@ -50,6 +50,17 @@ function listaDeObjetos(v: unknown): Objeto[] {
 }
 
 // ---------------------------------------------------------------------------
+// Perguntas geradas (diagnóstico e entrevista)
+// ---------------------------------------------------------------------------
+
+/** Uma pergunta de entrevista tem uma ou duas frases; texto maior é desvio. */
+export const MAX_PERGUNTA_IA = 800;
+
+export function perguntaValida(v: unknown): v is string {
+  return ehTexto(v) && v.trim() !== "" && v.length <= MAX_PERGUNTA_IA;
+}
+
+// ---------------------------------------------------------------------------
 // Auditoria de LinkedIn
 // ---------------------------------------------------------------------------
 

@@ -1,4 +1,4 @@
-import { gerarJson } from "@/lib/anthropic";
+import { gerarJson, REGRA_CONTEUDO_DO_CANDIDATO } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import {
   normalizarAnaliseLinkedIn,
@@ -102,7 +102,9 @@ Responda APENAS em JSON válido, sem markdown, com essa estrutura exata:
     }
   ] (gere de 2 a 4 melhorias, as mais impactantes primeiro),
   "acoes": ["próximo passo recomendado 1", "próximo passo recomendado 2", "próximo passo recomendado 3"]
-}`;
+}
+
+${REGRA_CONTEUDO_DO_CANDIDATO}`;
 
     const analise = normalizarAnaliseLinkedIn(
       await gerarJson<unknown>(

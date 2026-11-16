@@ -1,4 +1,4 @@
-import { gerarJson } from "@/lib/anthropic";
+import { gerarJson, REGRA_CONTEUDO_DO_CANDIDATO } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import { buscarUrlPublica } from "@/lib/buscarUrlPublica";
 import { normalizarCurriculo, validarCurriculo } from "@/lib/validacaoIa";
@@ -91,7 +91,7 @@ Regras inegociáveis:
 
 ${
   vagaDescricao
-    ? `O candidato quer esse currículo focado especificamente na seguinte vaga. Leia a descrição, identifique os requisitos e palavras-chave mais importantes, e adapte resumo, ordem das habilidades e bullets de experiência para mostrar aderência real a ela:\n\n"""\n${vagaDescricao}\n"""`
+    ? "O candidato quer esse currículo focado especificamente na vaga descrita no fim da mensagem dele, entre <vaga> e </vaga>. Leia a descrição, identifique os requisitos e palavras-chave mais importantes, e adapte resumo, ordem das habilidades e bullets de experiência para mostrar aderência real a ela."
     : "O candidato não informou uma vaga específica — gere um currículo forte e genérico para a área em que ele atua, guiado pelo objetivo profissional informado."
 }
 
@@ -121,7 +121,9 @@ Responda APENAS em JSON válido, sem markdown, com essa estrutura exata:
   "habilidades": ["habilidade 1", "habilidade 2"] (ordenadas da mais relevante para a mais relevante para o objetivo/vaga),
   "idiomas": [{ "idioma": "idioma", "nivel": "nível" }] (lista vazia se não informado),
   "palavras_chave_alinhadas": ["palavra-chave da vaga que o currículo já cobre"] (lista vazia se não houver vaga)
-}`;
+}
+
+${REGRA_CONTEUDO_DO_CANDIDATO}`;
 
     const userMessage = `Dados do candidato:
 
@@ -145,7 +147,7 @@ Habilidades técnicas (texto livre do candidato):
 ${habilidades}
 
 Idiomas: ${idiomas?.trim() || "não informado"}
-
+${vagaDescricao ? `\nDescrição da vaga:\n<vaga>\n${vagaDescricao}\n</vaga>\n` : ""}
 Gere o currículo completo em JSON conforme a estrutura pedida.`;
 
     const curriculo = normalizarCurriculo(

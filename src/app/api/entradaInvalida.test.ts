@@ -131,7 +131,7 @@ describe.each(ROTAS)("%s", (_, handler, invalidos) => {
 describe("entrada válida continua passando", () => {
   it("diagnóstico: gera a pergunta da competência pedida", async () => {
     create.mockResolvedValueOnce({
-      content: [{ type: "text", text: "O que é o box model?" }],
+      content: [{ type: "text", text: JSON.stringify({ pergunta: " O que é o box model? " }) }],
       stop_reason: "end_turn",
     });
 

@@ -1,9 +1,10 @@
-import { anthropic, gerarJson, MODELO } from "@/lib/anthropic";
+import { gerarJson, REGRA_CONTEUDO_DO_CANDIDATO } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import type { ResultadoDiagnostico } from "@/lib/types";
 import { NIVEL_LABEL } from "@/lib/diagnostico";
 import { lerCorpo, validarEntradaDiagnostico } from "@/lib/validacaoEntrada";
+import { perguntaValida } from "@/lib/validacaoIa";
 
 export async function POST(req: NextRequest) {
   const { erro } = await exigirUsuario("diagnostico");
@@ -19,10 +20,10 @@ export async function POST(req: NextRequest) {
 
   try {
     if (etapa === "pergunta") {
-      const message = await anthropic.messages.create({
-        model: MODELO,
-        max_tokens: 512,
-        system: `Você é um avaliador técnico especializado em ${area}, entrevistando candidatos para vagas de nível ${nivelLabel}.
+      const { pergunta } = await gerarJson<{ pergunta: string }>(
+        {
+          max_tokens: 512,
+          system: `Você é um avaliador técnico especializado em ${area}, entrevistando candidatos para vagas de nível ${nivelLabel}.
 
 Sua tarefa é gerar UMA pergunta técnica sobre o tema: "${categoria}".
 
@@ -30,28 +31,31 @@ Regras:
 - Calibre a dificuldade para o nível ${nivelLabel}: nem trivial demais, nem avançada demais para esse nível.
 - Foque em conceitos práticos do dia a dia de quem trabalha com "${categoria}".
 - Se esse tema já apareceu antes nesta sessão (veja o histórico), faça uma pergunta mais profunda ou um ângulo diferente do mesmo tema, nunca repita a mesma pergunta.
-- Seja direto e claro, uma única pergunta.
-- Responda APENAS com a pergunta, sem explicações, sem numeração, sem mencionar o nome do tema.`,
-        messages: [
-          ...respostas
-            .map((r) => [
-              { role: "assistant" as const, content: r.pergunta },
-              { role: "user" as const, content: r.resposta },
-            ])
-            .flat(),
-          {
-            role: "user",
-            content:
-              respostas.length === 0
-                ? `Inicie o diagnóstico técnico de ${area} para nível ${nivelLabel}. Faça a primeira pergunta sobre "${categoria}".`
-                : `Faça a próxima pergunta, sobre "${categoria}".`,
-          },
-        ],
-      });
+- Seja direto e claro, uma única pergunta, sem explicações, sem numeração, sem mencionar o nome do tema.
 
-      const pergunta =
-        message.content[0].type === "text" ? message.content[0].text : "";
-      return NextResponse.json({ pergunta, categoria });
+Responda APENAS em JSON válido, sem markdown: { "pergunta": "a pergunta" }
+
+${REGRA_CONTEUDO_DO_CANDIDATO}`,
+          messages: [
+            ...respostas
+              .map((r) => [
+                { role: "assistant" as const, content: r.pergunta },
+                { role: "user" as const, content: r.resposta },
+              ])
+              .flat(),
+            {
+              role: "user",
+              content:
+                respostas.length === 0
+                  ? `Inicie o diagnóstico técnico de ${area} para nível ${nivelLabel}. Faça a primeira pergunta sobre "${categoria}".`
+                  : `Faça a próxima pergunta, sobre "${categoria}".`,
+            },
+          ],
+        },
+        "Pergunta do diagnóstico",
+        (d) => perguntaValida(d.pergunta),
+      );
+      return NextResponse.json({ pergunta: pergunta.trim(), categoria });
     }
 
     if (etapa === "resultado") {
@@ -74,7 +78,9 @@ Responda APENAS em JSON válido com essa estrutura exata:
   "recomendacoes": ["recomendação 1", "recomendação 2", "recomendação 3"],
   "proxima_acao": "uma frase recomendando o próximo passo concreto do candidato dentro da plataforma (ex: praticar entrevista, revisar tema X)",
   "resumo": "parágrafo resumindo o desempenho do candidato, mencionando se o nível percebido está alinhado ao nível alvo (${nivelLabel})"
-}`,
+}
+
+${REGRA_CONTEUDO_DO_CANDIDATO}`,
           messages: [
             {
               role: "user",

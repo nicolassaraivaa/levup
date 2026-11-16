@@ -151,6 +151,8 @@ O proxy só redireciona páginas. Cada rota de `src/app/api/` chama `exigirUsuar
 
 Depois do login, o corpo de cada rota passa por `src/lib/validacaoEntrada.ts`: área, nível, etapa, competência, tema, tipo e objetivo precisam ser valores conhecidos (nada de texto livre interpolado nos prompts), e os textos têm limite de tamanho (respostas até 4.000 caracteres, no máximo 20 respostas no diagnóstico e 10 na entrevista, perfil do LinkedIn até 20.000, arquivo até 4 MB em base64, campos do CV, até 20 dificuldades de até 300 caracteres no dashboard). Entrada inválida ou JSON malformado recebe `400` com mensagem em português, sem chamar a IA.
 
+Contra injeção de prompt, o texto livre do candidato (respostas, perfil, currículo, vaga, dificuldades) só vai nas mensagens, nunca no prompt de sistema, e todo prompt de sistema termina com a regra `REGRA_CONTEUDO_DO_CANDIDATO` (`src/lib/anthropic.ts`), que manda tratar esse texto como dado. As perguntas geradas pela IA no diagnóstico e na entrevista vêm em JSON validado, com no máximo 800 caracteres.
+
 As mensagens de erro do Supabase Auth (e-mail já cadastrado, senha fraca, e-mail não confirmado, limite de requisições, falha de rede...) são traduzidas por `src/lib/mensagensErro.ts`; erros desconhecidos viram um texto genérico em português.
 
 ## Design system
@@ -201,7 +203,7 @@ Abra [http://localhost:3000](http://localhost:3000).
 
 ### Testes
 
-`npm test` roda 328 testes (Vitest, em 15 arquivos; contagem de 16/11/2026), sem rede e sem chamar a Anthropic ou o Supabase reais (os clientes são simulados):
+`npm test` roda 338 testes (Vitest, em 16 arquivos; contagem de 16/11/2026), sem rede e sem chamar a Anthropic ou o Supabase reais (os clientes são simulados):
 
 | Arquivo | O que cobre |
 |---|---|
@@ -216,6 +218,7 @@ Abra [http://localhost:3000](http://localhost:3000).
 | `src/lib/auth.test.ts` | `exigirUsuario()`: 401, limite de uso (429) e 503 quando o limite não pode ser consultado |
 | `src/lib/validacaoEntrada.test.ts` | valores aceitos e limites de tamanho de cada rota |
 | `src/app/api/entradaInvalida.test.ts` | cada rota responde 400 a entrada inválida ou JSON malformado, sem chamar a IA |
+| `src/app/api/prompts.test.ts` | texto do candidato fora do prompt de sistema, regra anti-injeção em todos os prompts e pergunta da IA em JSON com tamanho máximo |
 | `src/proxy.test.ts` | toda página interna redireciona para `/login` sem sessão |
 | `supabase/migracoes.test.ts` | aplica as migrações num Postgres em memória: RLS em todas as tabelas, isolamento entre usuários, perfil automático, limite de 5 e limite de uso por hora |
 | `src/lib/pdf/CurriculoDocument.test.ts` | o PDF do currículo tem texto extraível (compatível com ATS) |
