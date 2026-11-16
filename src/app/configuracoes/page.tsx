@@ -64,7 +64,11 @@ export default function ConfiguracoesPage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setErroPerfil(mensagemErroAuth({ code: "session_expired" }));
+      setSalvandoPerfil(false);
+      return;
+    }
 
     const { error } = await supabase
       .from("profiles")

@@ -10,6 +10,7 @@ import {
   Lock,
   ArrowRight,
   AlertCircle,
+  MailCheck,
 } from "lucide-react";
 import AuthShell from "@/components/AuthShell";
 import { mensagemErroAuth } from "@/lib/mensagensErro";
@@ -20,6 +21,7 @@ export default function CadastroPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [confirmarEmail, setConfirmarEmail] = useState("");
   const router = useRouter();
   const supabase = createClient();
 
@@ -48,6 +50,13 @@ export default function CadastroPage() {
       setLoading(false);
       return;
     }
+    // Sem sessão = confirmação de e-mail ativa. Ir para o dashboard aqui só
+    // faria o proxy devolver o usuário ao login, sem explicação.
+    if (!data.session) {
+      setConfirmarEmail(email);
+      setLoading(false);
+      return;
+    }
 
     router.push("/dashboard");
     router.refresh();
@@ -65,7 +74,25 @@ export default function CadastroPage() {
         Leva menos de um minuto. Sem cartão de crédito.
       </p>
 
-      <form onSubmit={handleCadastro} className="mt-8 space-y-4">
+      {confirmarEmail && (
+        <div className="mt-8 flex gap-2.5 rounded-md border border-sage/30 bg-sage-wash px-3.5 py-3 text-sm text-sage">
+          <MailCheck size={16} className="mt-0.5 shrink-0" />
+          <p>
+            Conta criada! Enviamos um link de confirmação para{" "}
+            <strong className="break-all">{confirmarEmail}</strong>. Abra o
+            link e depois{" "}
+            <Link href="/login" className="font-medium underline">
+              entre na sua conta
+            </Link>
+            .
+          </p>
+        </div>
+      )}
+
+      <form
+        onSubmit={handleCadastro}
+        className={`mt-8 space-y-4 ${confirmarEmail ? "hidden" : ""}`}
+      >
         <div>
           <label className="text-sm text-ink-muted mb-1.5 block">
             Nome completo
