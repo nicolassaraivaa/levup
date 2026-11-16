@@ -194,21 +194,7 @@ export default function AuditoriaPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        const { data: existentes } = await supabase
-          .from("profile_audits")
-          .select("id, created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: true });
-
-        if (existentes && existentes.length >= MAX_HISTORICO) {
-          const idsParaExcluir = existentes
-            .slice(0, existentes.length - (MAX_HISTORICO - 1))
-            .map((r) => r.id);
-          if (idsParaExcluir.length > 0) {
-            await supabase.from("profile_audits").delete().in("id", idsParaExcluir);
-          }
-        }
-
+        // O limite de 5 registros é aplicado por trigger no banco.
         await supabase.from("profile_audits").insert({
           user_id: user.id,
           linkedin_url: null,

@@ -274,21 +274,7 @@ export default function EntrevistasPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
-      const { data: existentes } = await supabase
-        .from("interview_sessions")
-        .select("id, created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
-
-      if (existentes && existentes.length >= MAX_HISTORICO_ENTREVISTAS) {
-        const idsParaExcluir = existentes
-          .slice(0, existentes.length - (MAX_HISTORICO_ENTREVISTAS - 1))
-          .map((r) => r.id);
-        if (idsParaExcluir.length > 0) {
-          await supabase.from("interview_sessions").delete().in("id", idsParaExcluir);
-        }
-      }
-
+      // O limite de 5 registros é aplicado por trigger no banco.
       await supabase.from("interview_sessions").insert({
         user_id: user.id,
         type: "mista",

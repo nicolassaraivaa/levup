@@ -177,21 +177,7 @@ export default function CVPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        const { data: existentes } = await supabase
-          .from("cv_generations")
-          .select("id, created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: true });
-
-        if (existentes && existentes.length >= MAX_HISTORICO_CV) {
-          const idsParaExcluir = existentes
-            .slice(0, existentes.length - (MAX_HISTORICO_CV - 1))
-            .map((r) => r.id);
-          if (idsParaExcluir.length > 0) {
-            await supabase.from("cv_generations").delete().in("id", idsParaExcluir);
-          }
-        }
-
+        // O limite de 5 registros é aplicado por trigger no banco.
         await supabase.from("cv_generations").insert({
           user_id: user.id,
           curriculo: data.curriculo,

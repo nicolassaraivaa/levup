@@ -27,7 +27,9 @@ export default function CadastroPage() {
     setLoading(true);
     setError("");
 
-    const { data, error } = await supabase.auth.signUp({
+    // O perfil (tabela profiles) é criado pelo trigger
+    // ao_criar_usuario_criar_perfil, com o nome enviado em options.data.
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name } },
@@ -37,14 +39,6 @@ export default function CadastroPage() {
       setError("Erro ao criar conta: " + error.message);
       setLoading(false);
       return;
-    }
-
-    if (data.user) {
-      await supabase.from("profiles").insert({
-        id: data.user.id,
-        name,
-        email,
-      });
     }
 
     router.push("/dashboard");
