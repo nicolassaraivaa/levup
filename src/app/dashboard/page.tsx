@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import { agregarHistoricoCategorias } from "@/lib/diagnostico";
 import { mensagemDeErro } from "@/lib/mensagensErro";
+import { LIMITES } from "@/lib/validacaoEntrada";
 import Sidebar from "@/components/Sidebar";
 import {
   Target,
@@ -210,9 +211,13 @@ export default function DashboardPage() {
         ...diagnosticos.slice(0, 3).flatMap((d) => d.result?.gaps ?? []),
         ...auditorias.slice(0, 3).flatMap((a) => a.report?.melhorias?.map((m) => m.problema) ?? []),
         ...entrevistas.slice(0, 3).flatMap((e) => e.feedback?.pontos_melhoria ?? []),
-      ].filter(Boolean),
+      ]
+        .filter(Boolean)
+        // A rota recusa itens acima do limite; o "problema" das auditorias
+        // pode ser longo.
+        .map((g) => String(g).slice(0, LIMITES.textoGap)),
     ),
-  ).slice(0, 20);
+  ).slice(0, LIMITES.gaps);
 
   async function gerarSugestoes() {
     setLoadingSugestoes(true);

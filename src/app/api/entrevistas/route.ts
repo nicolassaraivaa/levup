@@ -1,26 +1,19 @@
 import { gerarJson } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import type { RespostaEntrevista } from "@/lib/types";
-import {
-  NIVEL_LABEL,
-  type AreaDiagnostico,
-  type NivelAlvo,
-} from "@/lib/diagnostico";
+import { NIVEL_LABEL } from "@/lib/diagnostico";
 import { deveContinuarEntrevista } from "@/lib/entrevista";
+import { lerCorpo, validarEntradaEntrevista } from "@/lib/validacaoEntrada";
 
 export async function POST(req: NextRequest) {
   const { erro } = await exigirUsuario();
   if (erro) return erro;
 
-  const { area, nivel, etapa, respostas, tema, tipo } = (await req.json()) as {
-    area: AreaDiagnostico;
-    nivel: NivelAlvo;
-    etapa: "pergunta" | "feedback";
-    respostas: RespostaEntrevista[];
-    tema?: string;
-    tipo?: "tecnica" | "comportamental";
-  };
+  const entrada = validarEntradaEntrevista(await lerCorpo(req));
+  if (!entrada.ok) {
+    return NextResponse.json({ error: entrada.erro }, { status: 400 });
+  }
+  const { area, nivel, etapa, respostas, tema, tipo } = entrada.dados;
 
   const nivelLabel = NIVEL_LABEL[nivel] ?? "júnior";
 
@@ -87,7 +80,18 @@ Responda APENAS em JSON válido, sem markdown:
           !pedirProximaPergunta ||
           (typeof d.pergunta === "string" && d.pergunta.trim() !== ""),
       );
-      return NextResponse.json({ ...data, finalizado: !pedirProximaPergunta });
+      // A nota volta do navegador no próximo pedido e passa pela validação
+      // de entrada: garante um número de 0 a 100 (ou null).
+      const nota = data.score_ultima_resposta;
+      const score_ultima_resposta =
+        typeof nota === "number" && Number.isFinite(nota)
+          ? Math.min(100, Math.max(0, Math.round(nota)))
+          : null;
+      return NextResponse.json({
+        ...data,
+        score_ultima_resposta,
+        finalizado: !pedirProximaPergunta,
+      });
     }
 
     if (etapa === "feedback") {

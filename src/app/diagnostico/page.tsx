@@ -12,6 +12,7 @@ import {
   type NivelAlvo,
 } from "@/lib/diagnostico";
 import { mensagemDeErro } from "@/lib/mensagensErro";
+import { LIMITES } from "@/lib/validacaoEntrada";
 import Sidebar from "@/components/Sidebar";
 import {
   Target,
@@ -375,6 +376,7 @@ export default function DiagnosticoPage() {
                   value={resposta}
                   onChange={(e) => setResposta(e.target.value)}
                   placeholder="Digite sua resposta aqui..."
+                  maxLength={LIMITES.textoResposta}
                   rows={5}
                   className="w-full bg-surface border border-hairline-strong rounded-xl px-4 py-3 text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition resize-none mb-4"
                 />

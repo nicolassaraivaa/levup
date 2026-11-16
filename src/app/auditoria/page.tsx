@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Profile, ObjetivoAnalise, AnaliseLinkedIn, SecaoAnaliseLinkedIn } from "@/lib/types";
 import { normalizarAnaliseLinkedIn } from "@/lib/validacaoIa";
 import { mensagemDeErro } from "@/lib/mensagensErro";
+import { LIMITES, TAMANHO_MAXIMO_ARQUIVO } from "@/lib/validacaoEntrada";
 import Sidebar from "@/components/Sidebar";
 import ObjetivoSelect from "@/components/ObjetivoSelect";
 import LinkedInIcon from "@/components/icons/LinkedInIcon";
@@ -46,7 +47,8 @@ const ABAS: { id: AbaId; label: string }[] = [
 
 const MAX_HISTORICO = 5;
 
-const LIMITE_MB: Record<"imagem" | "pdf", number> = { imagem: 5, pdf: 15 };
+// Mesmo limite da rota (4 MB de base64, por causa do corpo de 4,5 MB da Vercel).
+const LIMITE_MB = TAMANHO_MAXIMO_ARQUIVO / 1024 / 1024;
 
 function lerArquivoBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -146,9 +148,8 @@ export default function AuditoriaPage() {
     if (!file || modo === "texto") return;
     setErro("");
 
-    const limiteMb = LIMITE_MB[modo];
-    if (file.size > limiteMb * 1024 * 1024) {
-      setErro(`Arquivo muito grande. O limite é ${limiteMb}MB.`);
+    if (file.size > TAMANHO_MAXIMO_ARQUIVO) {
+      setErro(`Arquivo muito grande. O limite é ${LIMITE_MB} MB.`);
       return;
     }
 
@@ -294,6 +295,7 @@ export default function AuditoriaPage() {
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
                   rows={8}
+                  maxLength={LIMITES.textoLinkedin}
                   placeholder="Cole aqui a headline, o 'Sobre', experiências, formação e habilidades do seu perfil..."
                   className="w-full bg-background border border-hairline-strong rounded-lg px-4 py-3 text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition resize-none text-sm"
                 />
@@ -302,8 +304,8 @@ export default function AuditoriaPage() {
                   <UploadCloud size={22} />
                   <span className="text-sm text-center px-4">
                     {modo === "imagem"
-                      ? `Clique para enviar uma captura de tela do seu perfil (JPEG, PNG, WEBP — até ${LIMITE_MB.imagem}MB)`
-                      : `Clique para enviar o PDF exportado do seu perfil pelo LinkedIn (até ${LIMITE_MB.pdf}MB)`}
+                      ? `Clique para enviar uma captura de tela do seu perfil (JPEG, PNG, WEBP — até ${LIMITE_MB} MB)`
+                      : `Clique para enviar o PDF exportado do seu perfil pelo LinkedIn (até ${LIMITE_MB} MB)`}
                   </span>
                   <input
                     ref={fileInputRef}

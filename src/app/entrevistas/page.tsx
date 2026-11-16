@@ -13,6 +13,7 @@ import {
   type EtapaPlanoEntrevista,
 } from "@/lib/entrevista";
 import { mensagemDeErro } from "@/lib/mensagensErro";
+import { LIMITES } from "@/lib/validacaoEntrada";
 import Sidebar from "@/components/Sidebar";
 import {
   Mic,
@@ -572,6 +573,7 @@ export default function EntrevistasPage() {
                     }
                   }}
                   placeholder="Digite sua resposta..."
+                  maxLength={LIMITES.textoResposta}
                   rows={2}
                   disabled={loading}
                   className="flex-1 bg-surface-raised border border-hairline-strong rounded-xl px-4 py-3 text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition resize-none text-sm"

@@ -4,80 +4,48 @@ import {
   normalizarAnaliseLinkedIn,
   validarAnaliseLinkedIn,
 } from "@/lib/validacaoIa";
+import { lerCorpo, validarEntradaAuditoria } from "@/lib/validacaoEntrada";
+import type { ObjetivoAnalise } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
 import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
-const OBJETIVO_LABELS: Record<string, string> = {
+const OBJETIVO_LABELS: Record<ObjetivoAnalise, string> = {
   primeiro_emprego: "conseguir o primeiro emprego na área",
   crescimento_carreira: "crescer na carreira atual",
   oportunidades_internacionais: "buscar oportunidades internacionais",
 };
 
-const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-
-type Modo = "texto" | "imagem" | "pdf";
-
 export async function POST(req: NextRequest) {
   const { erro } = await exigirUsuario();
   if (erro) return erro;
 
-  const { objetivo, modo, texto, arquivo } = (await req.json()) as {
-    objetivo: string;
-    modo: Modo;
-    texto?: string;
-    arquivo?: { base64: string; mediaType: string };
-  };
+  const resultado = validarEntradaAuditoria(await lerCorpo(req));
+  if (!resultado.ok) {
+    return NextResponse.json({ error: resultado.erro }, { status: 400 });
+  }
+  const entrada = resultado.dados;
 
-  if (!objetivo || !modo) {
-    return NextResponse.json(
-      { error: "Preencha o objetivo e envie o conteúdo do seu perfil." },
-      { status: 400 },
-    );
-  }
-  if (modo === "texto" && !texto?.trim()) {
-    return NextResponse.json(
-      { error: "Cole o texto do seu perfil do LinkedIn." },
-      { status: 400 },
-    );
-  }
-  if ((modo === "imagem" || modo === "pdf") && !arquivo?.base64) {
-    return NextResponse.json(
-      { error: "Envie um arquivo válido." },
-      { status: 400 },
-    );
-  }
-  if (modo === "imagem" && arquivo && !IMAGE_MEDIA_TYPES.includes(arquivo.mediaType)) {
-    return NextResponse.json(
-      { error: "Formato de imagem não suportado. Use JPEG, PNG, GIF ou WEBP." },
-      { status: 400 },
-    );
-  }
-
-  const objetivoLabel = OBJETIVO_LABELS[objetivo] || objetivo;
+  const objetivoLabel = OBJETIVO_LABELS[entrada.objetivo];
 
   const content: ContentBlockParam[] = [];
 
-  if (modo === "imagem" && arquivo) {
+  if (entrada.modo === "imagem") {
     content.push({
       type: "image",
       source: {
         type: "base64",
-        media_type: arquivo.mediaType as
-          | "image/jpeg"
-          | "image/png"
-          | "image/gif"
-          | "image/webp",
-        data: arquivo.base64,
+        media_type: entrada.arquivo.mediaType,
+        data: entrada.arquivo.base64,
       },
     });
     content.push({
       type: "text",
       text: "Essa é uma captura de tela do perfil do LinkedIn do candidato. Analise todas as informações visíveis. Gere a análise completa.",
     });
-  } else if (modo === "pdf" && arquivo) {
+  } else if (entrada.modo === "pdf") {
     content.push({
       type: "document",
-      source: { type: "base64", media_type: "application/pdf", data: arquivo.base64 },
+      source: { type: "base64", media_type: "application/pdf", data: entrada.arquivo.base64 },
     });
     content.push({
       type: "text",
@@ -86,7 +54,7 @@ export async function POST(req: NextRequest) {
   } else {
     content.push({
       type: "text",
-      text: `Texto colado do perfil do LinkedIn do candidato:\n\n${texto}\n\nGere a análise completa.`,
+      text: `Texto colado do perfil do LinkedIn do candidato:\n\n${entrada.texto}\n\nGere a análise completa.`,
     });
   }
 

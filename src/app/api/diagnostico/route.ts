@@ -1,24 +1,19 @@
 import { anthropic, gerarJson, MODELO } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import type { RespostaDiagnostico, ResultadoDiagnostico } from "@/lib/types";
-import {
-  NIVEL_LABEL,
-  type AreaDiagnostico,
-  type NivelAlvo,
-} from "@/lib/diagnostico";
+import type { ResultadoDiagnostico } from "@/lib/types";
+import { NIVEL_LABEL } from "@/lib/diagnostico";
+import { lerCorpo, validarEntradaDiagnostico } from "@/lib/validacaoEntrada";
 
 export async function POST(req: NextRequest) {
   const { erro } = await exigirUsuario();
   if (erro) return erro;
 
-  const { area, nivel, etapa, respostas, categoria } = (await req.json()) as {
-    area: AreaDiagnostico;
-    nivel: NivelAlvo;
-    etapa: "pergunta" | "resultado";
-    respostas: RespostaDiagnostico[];
-    categoria?: string;
-  };
+  const entrada = validarEntradaDiagnostico(await lerCorpo(req));
+  if (!entrada.ok) {
+    return NextResponse.json({ error: entrada.erro }, { status: 400 });
+  }
+  const { area, nivel, etapa, respostas, categoria } = entrada.dados;
 
   const nivelLabel = NIVEL_LABEL[nivel] ?? "júnior";
 

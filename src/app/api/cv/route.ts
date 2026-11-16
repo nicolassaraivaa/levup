@@ -2,9 +2,8 @@ import { gerarJson } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import { buscarUrlPublica } from "@/lib/buscarUrlPublica";
 import { normalizarCurriculo, validarCurriculo } from "@/lib/validacaoIa";
+import { lerCorpo, validarEntradaCv } from "@/lib/validacaoEntrada";
 import { NextRequest, NextResponse } from "next/server";
-
-type VagaModo = "texto" | "url";
 
 const LIMITE_TEXTO_VAGA = 8000;
 
@@ -39,6 +38,10 @@ export async function POST(req: NextRequest) {
   const { erro } = await exigirUsuario();
   if (erro) return erro;
 
+  const entrada = validarEntradaCv(await lerCorpo(req));
+  if (!entrada.ok) {
+    return NextResponse.json({ error: entrada.erro }, { status: 400 });
+  }
   const {
     nome,
     email,
@@ -54,35 +57,7 @@ export async function POST(req: NextRequest) {
     vagaModo,
     vagaTexto,
     vagaUrl,
-  } = (await req.json()) as {
-    nome: string;
-    email: string;
-    telefone: string;
-    localizacao?: string;
-    linkedin?: string;
-    github?: string;
-    objetivo: string;
-    experiencias: string;
-    formacao: string;
-    habilidades: string;
-    idiomas?: string;
-    vagaModo: VagaModo;
-    vagaTexto?: string;
-    vagaUrl?: string;
-  };
-
-  if (!nome || !email || !objetivo || !experiencias || !formacao || !habilidades) {
-    return NextResponse.json(
-      { error: "Preencha todos os campos obrigatórios." },
-      { status: 400 },
-    );
-  }
-  if (vagaModo === "url" && !vagaUrl?.trim()) {
-    return NextResponse.json(
-      { error: "Informe a URL da vaga." },
-      { status: 400 },
-    );
-  }
+  } = entrada.dados;
 
   let vagaDescricao = "";
   if (vagaModo === "url" && vagaUrl) {

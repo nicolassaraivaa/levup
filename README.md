@@ -91,6 +91,7 @@ src/
 ├── lib/
 │   ├── anthropic.ts     # client da Anthropic SDK + gerarJson() (JSON com nova tentativa)
 │   ├── auth.ts          # exigirUsuario(): 401 nas rotas de API sem sessão
+│   ├── validacaoEntrada.ts # valida o corpo das 6 rotas de API (valores aceitos e limites)
 │   ├── validacaoIa.ts   # valida e completa os JSONs da IA (auditoria e CV)
 │   ├── mensagensErro.ts # erros do Supabase Auth e de rede em português
 │   ├── buscarUrlPublica.ts # busca da URL da vaga com proteção contra SSRF
@@ -146,6 +147,8 @@ Para conferir depois: `select relname, relrowsecurity from pg_class where relnam
 
 O proxy só redireciona páginas. Cada rota de `src/app/api/` chama `exigirUsuario()` (`src/lib/auth.ts`) antes de qualquer outra coisa e responde `401` sem sessão, sem chamar a IA.
 
+Depois do login, o corpo de cada rota passa por `src/lib/validacaoEntrada.ts`: área, nível, etapa, competência, tema, tipo e objetivo precisam ser valores conhecidos (nada de texto livre interpolado nos prompts), e os textos têm limite de tamanho (respostas até 4.000 caracteres, no máximo 20 respostas no diagnóstico e 10 na entrevista, perfil do LinkedIn até 20.000, arquivo até 4 MB em base64, campos do CV, até 20 dificuldades de até 300 caracteres no dashboard). Entrada inválida ou JSON malformado recebe `400` com mensagem em português, sem chamar a IA.
+
 As mensagens de erro do Supabase Auth (e-mail já cadastrado, senha fraca, e-mail não confirmado, limite de requisições, falha de rede...) são traduzidas por `src/lib/mensagensErro.ts`; erros desconhecidos viram um texto genérico em português.
 
 ## Design system
@@ -196,7 +199,7 @@ Abra [http://localhost:3000](http://localhost:3000).
 
 ### Testes
 
-`npm test` roda 166 testes (Vitest, em 12 arquivos; contagem de 16/11/2026), sem rede e sem chamar a Anthropic ou o Supabase reais (os clientes são simulados):
+`npm test` roda 312 testes (Vitest, em 14 arquivos; contagem de 16/11/2026), sem rede e sem chamar a Anthropic ou o Supabase reais (os clientes são simulados):
 
 | Arquivo | O que cobre |
 |---|---|
@@ -208,6 +211,8 @@ Abra [http://localhost:3000](http://localhost:3000).
 | `src/lib/buscarUrlPublica.test.ts` | IPs e URLs bloqueados (loopback, rede privada, metadados da nuvem, IPv6...) |
 | `src/lib/buscarUrlPublica.rede.test.ts` | com rede simulada: redirecionamento para IP interno, mais de 5 redirecionamentos, corte em 2 MB (inclusive gzip) |
 | `src/app/api/autenticacao.test.ts` | toda rota de API responde 401 sem sessão |
+| `src/lib/validacaoEntrada.test.ts` | valores aceitos e limites de tamanho de cada rota |
+| `src/app/api/entradaInvalida.test.ts` | cada rota responde 400 a entrada inválida ou JSON malformado, sem chamar a IA |
 | `src/proxy.test.ts` | toda página interna redireciona para `/login` sem sessão |
 | `supabase/migracoes.test.ts` | aplica as 3 migrações num Postgres em memória: RLS nas 5 tabelas, isolamento entre usuários, perfil automático e limite de 5 |
 | `src/lib/pdf/CurriculoDocument.test.ts` | o PDF do currículo tem texto extraível (compatível com ATS) |

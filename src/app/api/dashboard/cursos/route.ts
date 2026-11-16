@@ -1,17 +1,19 @@
 import { gerarJson } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
+import { lerCorpo, validarEntradaCursos } from "@/lib/validacaoEntrada";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   const { erro } = await exigirUsuario();
   if (erro) return erro;
 
-  const { area, gaps } = (await req.json()) as {
-    area: string | null;
-    gaps: string[];
-  };
+  const entrada = validarEntradaCursos(await lerCorpo(req));
+  if (!entrada.ok) {
+    return NextResponse.json({ error: entrada.erro }, { status: 400 });
+  }
+  const { area, gaps } = entrada.dados;
 
-  if (!gaps || gaps.length === 0) {
+  if (gaps.length === 0) {
     return NextResponse.json({ sugestoes: [] });
   }
 

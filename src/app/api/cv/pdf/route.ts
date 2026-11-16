@@ -2,21 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { CurriculoDocument } from "@/lib/pdf/CurriculoDocument";
 import { exigirUsuario } from "@/lib/auth";
-import { normalizarCurriculo } from "@/lib/validacaoIa";
+import { lerCorpo, validarEntradaPdf } from "@/lib/validacaoEntrada";
 
 export async function POST(req: NextRequest) {
   const { erro } = await exigirUsuario();
   if (erro) return erro;
 
-  try {
-    const corpo = (await req.json()) as { curriculo?: unknown };
-    // Pode vir de um registro antigo do histórico: completa as listas que
-    // faltarem para o CurriculoDocument não quebrar no .map.
-    const curriculo = normalizarCurriculo(corpo?.curriculo);
-    if (!curriculo.nome.trim()) {
-      return NextResponse.json({ error: "Currículo inválido." }, { status: 400 });
-    }
+  // Também completa as listas de registros antigos do histórico.
+  const entrada = validarEntradaPdf(await lerCorpo(req));
+  if (!entrada.ok) {
+    return NextResponse.json({ error: entrada.erro }, { status: 400 });
+  }
+  const curriculo = entrada.dados;
 
+  try {
     const buffer = await renderToBuffer(CurriculoDocument({ curriculo }));
     const nomeArquivo = curriculo.nome
       .toLowerCase()
