@@ -4,7 +4,7 @@ import { lerCorpo, validarEntradaCursos } from "@/lib/validacaoEntrada";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const { erro } = await exigirUsuario();
+  const { erro } = await exigirUsuario("cursos");
   if (erro) return erro;
 
   const entrada = validarEntradaCursos(await lerCorpo(req));

@@ -3,14 +3,15 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// RNF01: toda rota de /api responde 401 sem sessão, antes de gastar qualquer
-// recurso (Anthropic, busca de URL externa, geração de PDF). As rotas são
-// descobertas no sistema de arquivos, então uma rota nova sem exigirUsuario()
-// faz este teste falhar.
+// RNF01: toda rota de /api responde 401 sem sessão e 429 sem cota de uso,
+// antes de gastar qualquer recurso (Anthropic, busca de URL externa, geração
+// de PDF). As rotas são descobertas no sistema de arquivos, então uma rota
+// nova sem exigirUsuario() faz este teste falhar.
 
 const getUser = vi.hoisted(() => vi.fn());
+const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ auth: { getUser } }),
+  createClient: async () => ({ auth: { getUser }, rpc }),
 }));
 
 const create = vi.hoisted(() => vi.fn());
@@ -73,7 +74,18 @@ function requisicao(rota: string, metodo: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   getUser.mockResolvedValue({ data: { user: null }, error: null });
+  rpc.mockResolvedValue({ data: true, error: null });
 });
+
+// Nome que cada rota usa em registrar_uso_api (os limites ficam na migração).
+const ROTA_LIMITADA: Record<string, string> = {
+  "/api/auditoria/linkedin": "auditoria",
+  "/api/cv": "cv",
+  "/api/cv/pdf": "cv_pdf",
+  "/api/dashboard/cursos": "cursos",
+  "/api/diagnostico": "diagnostico",
+  "/api/entrevistas": "entrevistas",
+};
 
 it("encontra todas as rotas de API do projeto", () => {
   expect(rotasDeApi()).toEqual([
@@ -101,6 +113,25 @@ describe.each(rotasDeApi())("%s", (rota) => {
       expect(await res.json()).toEqual({ error: "Não autenticado." });
     }
     expect(getUser).toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(buscarUrlPublica).not.toHaveBeenCalled();
+    expect(renderToBuffer).not.toHaveBeenCalled();
+  });
+
+  it("responde 429 com a cota esgotada e não gasta recursos", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "usuario-teste" } }, error: null });
+    rpc.mockResolvedValue({ data: false, error: null });
+    const arquivo = path.join(__dirname, rota.slice("/api/".length), "route.ts");
+    const modulo = (await import(/* @vite-ignore */ arquivo)) as Record<string, unknown>;
+
+    const res = await (modulo.POST as (req: NextRequest) => Promise<Response>)(
+      requisicao(rota, "POST"),
+    );
+
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toMatch(/limite de uso/);
+    expect(rpc).toHaveBeenCalledWith("registrar_uso_api", { p_rota: ROTA_LIMITADA[rota] });
     expect(create).not.toHaveBeenCalled();
     expect(buscarUrlPublica).not.toHaveBeenCalled();
     expect(renderToBuffer).not.toHaveBeenCalled();

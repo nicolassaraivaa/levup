@@ -6,7 +6,7 @@ import { deveContinuarEntrevista } from "@/lib/entrevista";
 import { lerCorpo, validarEntradaEntrevista } from "@/lib/validacaoEntrada";
 
 export async function POST(req: NextRequest) {
-  const { erro } = await exigirUsuario();
+  const { erro } = await exigirUsuario("entrevistas");
   if (erro) return erro;
 
   const entrada = validarEntradaEntrevista(await lerCorpo(req));

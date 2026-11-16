@@ -35,7 +35,7 @@ async function buscarTextoDaVaga(url: string): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
-  const { erro } = await exigirUsuario();
+  const { erro } = await exigirUsuario("cv");
   if (erro) return erro;
 
   const entrada = validarEntradaCv(await lerCorpo(req));

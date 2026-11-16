@@ -88,7 +88,7 @@ beforeAll(async () => {
   const migracoes = readdirSync(PASTA_MIGRACOES)
     .filter((f) => f.endsWith(".sql"))
     .sort();
-  expect(migracoes).toHaveLength(3);
+  expect(migracoes).toHaveLength(4);
   for (const arquivo of migracoes) {
     await db.exec(readFileSync(path.join(PASTA_MIGRACOES, arquivo), "utf8"));
   }
@@ -106,7 +106,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  for (const tabela of TABELAS_HISTORICO) {
+  for (const tabela of [...TABELAS_HISTORICO, "uso_api"]) {
     await db.exec(`delete from public.${tabela}`);
   }
 });
@@ -124,7 +124,7 @@ describe("migrações: perfil automático", () => {
 });
 
 describe("migrações: RLS", () => {
-  it("as 5 tabelas têm RLS ativo e pelo menos uma política", async () => {
+  it("todas as tabelas têm RLS ativo; só uso_api fica sem política", async () => {
     const { rows } = await db.query<{ tabela: string; rls: boolean; politicas: number }>(
       `select c.relname as tabela, c.relrowsecurity as rls,
               (select count(*)::int from pg_policies p
@@ -134,11 +134,13 @@ describe("migrações: RLS", () => {
         order by c.relname`,
     );
     expect(rows.map((r) => r.tabela)).toEqual(
-      ["profiles", ...TABELAS_HISTORICO].sort(),
+      ["profiles", ...TABELAS_HISTORICO, "uso_api"].sort(),
     );
     for (const r of rows) {
       expect(r.rls, r.tabela).toBe(true);
-      expect(r.politicas, r.tabela).toBeGreaterThan(0);
+      // uso_api não tem política de propósito: só a função mexe nela.
+      if (r.tabela === "uso_api") expect(r.politicas).toBe(0);
+      else expect(r.politicas, r.tabela).toBeGreaterThan(0);
     }
   });
 
@@ -241,5 +243,79 @@ describe("migrações: limite de 5 execuções", () => {
       { area: "backend", scores: [21, 22] },
       { area: "frontend", scores: [2, 3, 4, 5, 6] },
     ]);
+  });
+});
+
+describe("migrações: limite de uso das rotas (registrar_uso_api)", () => {
+  const registrar = (rota: string) =>
+    db.query<{ liberado: boolean }>("select public.registrar_uso_api($1) as liberado", [rota]);
+
+  async function usar(userId: string, rota: string, vezes: number) {
+    const resultados: boolean[] = [];
+    for (let i = 0; i < vezes; i++) {
+      const { rows } = await comoUsuario(userId, () => registrar(rota));
+      resultados.push(rows[0].liberado);
+    }
+    return resultados;
+  }
+
+  it("libera até o limite da rota por hora e recusa a seguinte", async () => {
+    const auditoria = await usar(ANA, "auditoria", 11);
+    expect(auditoria.slice(0, 10).every(Boolean)).toBe(true);
+    expect(auditoria[10]).toBe(false);
+
+    const diagnostico = await usar(ANA, "diagnostico", 61);
+    expect(diagnostico.filter(Boolean)).toHaveLength(60);
+    expect(diagnostico.at(-1)).toBe(false);
+  });
+
+  it("conta cada usuário e cada rota separadamente", async () => {
+    await usar(ANA, "cursos", 10);
+    expect(await usar(ANA, "cursos", 1)).toEqual([false]);
+    expect(await usar(BRUNO, "cursos", 1)).toEqual([true]);
+    expect(await usar(ANA, "cv", 1)).toEqual([true]);
+  });
+
+  it("chamadas com mais de uma hora deixam de contar e são apagadas", async () => {
+    await db.query(
+      `insert into public.uso_api (user_id, rota, criado_em)
+       select $1, 'auditoria', now() - interval '61 minutes' from generate_series(1, 10)`,
+      [ANA],
+    );
+    expect(await usar(ANA, "auditoria", 1)).toEqual([true]);
+    const { rows } = await db.query<{ n: number }>(
+      "select count(*)::int as n from public.uso_api where user_id = $1",
+      [ANA],
+    );
+    expect(rows[0].n).toBe(1);
+  });
+
+  it("recusa rota desconhecida", async () => {
+    await expect(comoUsuario(ANA, () => registrar("chat-livre"))).rejects.toThrow(
+      /rota desconhecida/,
+    );
+  });
+
+  it("sem login não pode chamar a função", async () => {
+    await expect(comoUsuario(null, () => registrar("cv"))).rejects.toThrow(
+      /permission denied/,
+    );
+  });
+
+  it("o usuário não lê, não insere e não apaga a tabela direto", async () => {
+    await usar(ANA, "cv", 3);
+    const lidos = await comoUsuario(ANA, () => db.query("select * from public.uso_api"));
+    expect(lidos.rows).toHaveLength(0);
+    const apagados = await comoUsuario(ANA, () => db.query("delete from public.uso_api"));
+    expect(apagados.affectedRows).toBe(0);
+    await expect(
+      comoUsuario(ANA, () =>
+        db.query("insert into public.uso_api (user_id, rota) values ($1, 'cv')", [BRUNO]),
+      ),
+    ).rejects.toThrow(/row-level security/);
+    const { rows } = await db.query<{ n: number }>(
+      "select count(*)::int as n from public.uso_api",
+    );
+    expect(rows[0].n).toBe(3);
   });
 });

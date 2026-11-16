@@ -16,7 +16,7 @@ const OBJETIVO_LABELS: Record<ObjetivoAnalise, string> = {
 };
 
 export async function POST(req: NextRequest) {
-  const { erro } = await exigirUsuario();
+  const { erro } = await exigirUsuario("auditoria");
   if (erro) return erro;
 
   const resultado = validarEntradaAuditoria(await lerCorpo(req));

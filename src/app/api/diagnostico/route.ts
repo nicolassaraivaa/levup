@@ -6,7 +6,7 @@ import { NIVEL_LABEL } from "@/lib/diagnostico";
 import { lerCorpo, validarEntradaDiagnostico } from "@/lib/validacaoEntrada";
 
 export async function POST(req: NextRequest) {
-  const { erro } = await exigirUsuario();
+  const { erro } = await exigirUsuario("diagnostico");
   if (erro) return erro;
 
   const entrada = validarEntradaDiagnostico(await lerCorpo(req));

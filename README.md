@@ -116,16 +116,18 @@ Tabelas usadas pela aplicação:
 | `interview_sessions` | histórico de entrevistas (`messages` + `feedback` jsonb) |
 | `profile_audits` | histórico de auditorias de LinkedIn (`report` jsonb) |
 | `cv_generations` | histórico de currículos gerados (`curriculo` jsonb) |
+| `uso_api` | chamadas recentes de cada usuário às rotas de API (limite de uso) |
 
 ### Migrações (`supabase/migrations/`)
 
-São 3 arquivos, aplicados em ordem:
+São 4 arquivos, aplicados em ordem:
 
 | Arquivo | O que faz |
 |---|---|
 | `20260926000000_schema_inicial.sql` | Cria as 5 tabelas e os índices, ativa RLS em todas e cria as políticas: em `profiles`, cada usuário lê, insere e altera só o próprio perfil; nas 4 tabelas de histórico, a política `linhas proprias` restringe tudo a `auth.uid() = user_id`. |
 | `20260926000100_perfil_automatico.sql` | Trigger `ao_criar_usuario_criar_perfil` em `auth.users`: cria a linha em `profiles` com o nome enviado no cadastro (`options.data.name`). Também cria o perfil de quem já existia sem ele. |
 | `20260926000200_limite_historico.sql` | Função `manter_ultimas_execucoes()` e trigger `limitar_historico` nas 4 tabelas de histórico: depois de cada insert, apaga o que passar de 5 registros por usuário (no diagnóstico, 5 por área). Também aplica o limite ao que já estava no banco. |
+| `20261116000000_limite_uso_api.sql` | Tabela `uso_api` (RLS ativo e nenhuma política, ou seja, inacessível pela API) e função `registrar_uso_api(rota)`, chamada pelas rotas de API para limitar o uso por usuário e por hora: diagnóstico 60, entrevistas 40, auditoria 10, CV 15, PDF 30 e sugestões de estudo 10. Os limites ficam na função, então chamá-la direto do navegador só gasta a cota do próprio usuário. **Sem essa migração, as rotas de API respondem 503.** |
 
 O limite de 5 execuções é aplicado **só pelo banco**: as páginas apenas inserem, e o trigger remove os registros mais antigos. Assim o limite vale para qualquer cliente e o histórico não é apagado se o insert falhar.
 
@@ -135,9 +137,9 @@ Como aplicar:
 
 - **Supabase CLI (projeto remoto):** `npx supabase login`, `npx supabase link --project-ref <ref-do-projeto>`, `npx supabase db push --dry-run` para ver o que será aplicado e depois `npx supabase db push`. O repositório não tem `supabase/config.toml`; se a CLI pedir, gere com `npx supabase init`.
 - **Local (precisa de Docker):** `npx supabase start` e `npx supabase db reset`, que recria o banco local aplicando as migrações.
-- **Sem CLI:** cole o conteúdo dos 3 arquivos, em ordem, no SQL Editor do painel do Supabase.
+- **Sem CLI:** cole o conteúdo dos 4 arquivos, em ordem, no SQL Editor do painel do Supabase.
 
-Para conferir depois: `select relname, relrowsecurity from pg_class where relnamespace = 'public'::regnamespace;`, `select * from pg_policies where schemaname = 'public';` e `select tgname, tgrelid::regclass from pg_trigger where tgname in ('limitar_historico', 'ao_criar_usuario_criar_perfil');`.
+Para conferir depois: `select relname, relrowsecurity from pg_class where relnamespace = 'public'::regnamespace;`, `select * from pg_policies where schemaname = 'public';` `select tgname, tgrelid::regclass from pg_trigger where tgname in ('limitar_historico', 'ao_criar_usuario_criar_perfil');` e `select proname from pg_proc where proname = 'registrar_uso_api';`.
 
 ## Autenticação e proteção de rotas
 
@@ -145,7 +147,7 @@ Para conferir depois: `select relname, relrowsecurity from pg_class where relnam
 - Usuário deslogado tentando acessar `/dashboard`, `/diagnostico`, `/entrevistas`, `/auditoria`, `/cv` ou `/configuracoes` → redirecionado para `/login`.
 - Usuário logado tentando acessar `/login` ou `/cadastro` → redirecionado para `/dashboard`.
 
-O proxy só redireciona páginas. Cada rota de `src/app/api/` chama `exigirUsuario()` (`src/lib/auth.ts`) antes de qualquer outra coisa e responde `401` sem sessão, sem chamar a IA.
+O proxy só redireciona páginas. Cada rota de `src/app/api/` chama `exigirUsuario()` (`src/lib/auth.ts`) antes de qualquer outra coisa: responde `401` sem sessão e `429` quando o usuário passou do limite de uso da rota na última hora (função `registrar_uso_api`, ver migrações), sem chamar a IA. Se o limite não puder ser consultado, a rota responde `503` em vez de liberar.
 
 Depois do login, o corpo de cada rota passa por `src/lib/validacaoEntrada.ts`: área, nível, etapa, competência, tema, tipo e objetivo precisam ser valores conhecidos (nada de texto livre interpolado nos prompts), e os textos têm limite de tamanho (respostas até 4.000 caracteres, no máximo 20 respostas no diagnóstico e 10 na entrevista, perfil do LinkedIn até 20.000, arquivo até 4 MB em base64, campos do CV, até 20 dificuldades de até 300 caracteres no dashboard). Entrada inválida ou JSON malformado recebe `400` com mensagem em português, sem chamar a IA.
 
@@ -165,7 +167,7 @@ Tema escuro único ("navy-ink"), definido em `src/app/globals.css` via `@theme i
 
 ### Pré-requisitos
 - Node.js 20+
-- Um projeto Supabase (URL + anon key) com as 3 migrações de `supabase/migrations/` aplicadas
+- Um projeto Supabase (URL + anon key) com as 4 migrações de `supabase/migrations/` aplicadas
 - Uma API key da Anthropic com créditos
 
 ### Variáveis de ambiente
@@ -199,7 +201,7 @@ Abra [http://localhost:3000](http://localhost:3000).
 
 ### Testes
 
-`npm test` roda 312 testes (Vitest, em 14 arquivos; contagem de 16/11/2026), sem rede e sem chamar a Anthropic ou o Supabase reais (os clientes são simulados):
+`npm test` roda 328 testes (Vitest, em 15 arquivos; contagem de 16/11/2026), sem rede e sem chamar a Anthropic ou o Supabase reais (os clientes são simulados):
 
 | Arquivo | O que cobre |
 |---|---|
@@ -210,11 +212,12 @@ Abra [http://localhost:3000](http://localhost:3000).
 | `src/app/api/respostasIa.test.ts` | rotas de auditoria e CV pedindo de novo quando a IA responde incompleto |
 | `src/lib/buscarUrlPublica.test.ts` | IPs e URLs bloqueados (loopback, rede privada, metadados da nuvem, IPv6...) |
 | `src/lib/buscarUrlPublica.rede.test.ts` | com rede simulada: redirecionamento para IP interno, mais de 5 redirecionamentos, corte em 2 MB (inclusive gzip) |
-| `src/app/api/autenticacao.test.ts` | toda rota de API responde 401 sem sessão |
+| `src/app/api/autenticacao.test.ts` | toda rota de API responde 401 sem sessão e 429 sem cota |
+| `src/lib/auth.test.ts` | `exigirUsuario()`: 401, limite de uso (429) e 503 quando o limite não pode ser consultado |
 | `src/lib/validacaoEntrada.test.ts` | valores aceitos e limites de tamanho de cada rota |
 | `src/app/api/entradaInvalida.test.ts` | cada rota responde 400 a entrada inválida ou JSON malformado, sem chamar a IA |
 | `src/proxy.test.ts` | toda página interna redireciona para `/login` sem sessão |
-| `supabase/migracoes.test.ts` | aplica as 3 migrações num Postgres em memória: RLS nas 5 tabelas, isolamento entre usuários, perfil automático e limite de 5 |
+| `supabase/migracoes.test.ts` | aplica as migrações num Postgres em memória: RLS em todas as tabelas, isolamento entre usuários, perfil automático, limite de 5 e limite de uso por hora |
 | `src/lib/pdf/CurriculoDocument.test.ts` | o PDF do currículo tem texto extraível (compatível com ATS) |
 | `src/lib/mensagensErro.test.ts` | tradução dos erros do Supabase Auth e de rede |
 

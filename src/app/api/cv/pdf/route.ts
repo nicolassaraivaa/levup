@@ -5,7 +5,7 @@ import { exigirUsuario } from "@/lib/auth";
 import { lerCorpo, validarEntradaPdf } from "@/lib/validacaoEntrada";
 
 export async function POST(req: NextRequest) {
-  const { erro } = await exigirUsuario();
+  const { erro } = await exigirUsuario("cv_pdf");
   if (erro) return erro;
 
   // Também completa as listas de registros antigos do histórico.
