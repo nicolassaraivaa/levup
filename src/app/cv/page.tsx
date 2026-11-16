@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Profile, CurriculoGerado } from "@/lib/types";
 import { normalizarCurriculo } from "@/lib/validacaoIa";
+import { mensagemDeErro } from "@/lib/mensagensErro";
 import Sidebar from "@/components/Sidebar";
 import {
   FileText,
@@ -186,7 +187,7 @@ export default function CVPage() {
         carregarHistorico(user.id);
       }
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setErro(mensagemDeErro(err));
     } finally {
       setLoading(false);
     }
@@ -224,7 +225,7 @@ export default function CVPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro inesperado ao gerar o PDF.");
+      setErro(mensagemDeErro(err, "Não foi possível gerar o PDF."));
     } finally {
       setBaixandoPdf(false);
     }

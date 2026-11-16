@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Profile, ObjetivoAnalise, AnaliseLinkedIn, SecaoAnaliseLinkedIn } from "@/lib/types";
 import { normalizarAnaliseLinkedIn } from "@/lib/validacaoIa";
+import { mensagemDeErro } from "@/lib/mensagensErro";
 import Sidebar from "@/components/Sidebar";
 import ObjetivoSelect from "@/components/ObjetivoSelect";
 import LinkedInIcon from "@/components/icons/LinkedInIcon";
@@ -208,7 +209,7 @@ export default function AuditoriaPage() {
       }
     } catch (err) {
       setStatus("idle");
-      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setErro(mensagemDeErro(err));
     }
   }
 

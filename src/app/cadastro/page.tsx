@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import AuthShell from "@/components/AuthShell";
+import { mensagemErroAuth } from "@/lib/mensagensErro";
 
 export default function CadastroPage() {
   const [name, setName] = useState("");
@@ -29,14 +30,21 @@ export default function CadastroPage() {
 
     // O perfil (tabela profiles) é criado pelo trigger
     // ao_criar_usuario_criar_perfil, com o nome enviado em options.data.
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name } },
     });
 
     if (error) {
-      setError("Erro ao criar conta: " + error.message);
+      setError(mensagemErroAuth(error));
+      setLoading(false);
+      return;
+    }
+    // Com confirmação de e-mail ativa, o Supabase não devolve erro para
+    // e-mail já cadastrado: devolve um usuário sem identidades.
+    if (data.user?.identities?.length === 0) {
+      setError(mensagemErroAuth({ code: "user_already_exists" }));
       setLoading(false);
       return;
     }

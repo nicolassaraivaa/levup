@@ -11,6 +11,7 @@ import {
   type AreaDiagnostico,
   type NivelAlvo,
 } from "@/lib/diagnostico";
+import { mensagemDeErro } from "@/lib/mensagensErro";
 import Sidebar from "@/components/Sidebar";
 import {
   Target,
@@ -160,7 +161,7 @@ export default function DiagnosticoPage() {
       setPerguntaAtual(data.pergunta);
       setCategoriaAtual(plano[0]);
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setErro(mensagemDeErro(err));
       setEtapa("selecao");
     } finally {
       setLoading(false);
@@ -216,7 +217,7 @@ export default function DiagnosticoPage() {
         setCategoriaAtual(proximaCategoria);
       }
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setErro(mensagemDeErro(err));
     } finally {
       setLoading(false);
     }

@@ -12,6 +12,7 @@ import {
   montarPlanoEntrevista,
   type EtapaPlanoEntrevista,
 } from "@/lib/entrevista";
+import { mensagemDeErro } from "@/lib/mensagensErro";
 import Sidebar from "@/components/Sidebar";
 import {
   Mic,
@@ -193,7 +194,7 @@ export default function EntrevistasPage() {
       setTipoAtual(novoPlano[0].tipo);
       iniciarTimer();
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setErro(mensagemDeErro(err));
       setEtapa("config");
     } finally {
       setLoading(false);
@@ -255,7 +256,7 @@ export default function EntrevistasPage() {
         iniciarTimer();
       }
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setErro(mensagemDeErro(err));
     } finally {
       setLoading(false);
     }

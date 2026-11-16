@@ -11,6 +11,7 @@ import type {
   AnaliseLinkedIn,
 } from "@/lib/types";
 import { agregarHistoricoCategorias } from "@/lib/diagnostico";
+import { mensagemDeErro } from "@/lib/mensagensErro";
 import Sidebar from "@/components/Sidebar";
 import {
   Target,
@@ -228,7 +229,7 @@ export default function DashboardPage() {
       }
       setSugestoes(data.sugestoes ?? []);
     } catch (err) {
-      setErroSugestoes(err instanceof Error ? err.message : "Erro inesperado.");
+      setErroSugestoes(mensagemDeErro(err));
     } finally {
       setLoadingSugestoes(false);
     }
@@ -527,7 +528,7 @@ export default function DashboardPage() {
             <a
               key={href}
               href={href}
-              className="group grid grid-cols-[auto_1fr] items-center gap-5 py-4 sm:grid-cols-[2.5rem_auto_1fr_auto] sm:gap-6"
+              className="group grid grid-cols-[auto_auto_1fr] items-center gap-4 py-4 sm:grid-cols-[2.5rem_auto_1fr_auto] sm:gap-6"
             >
               <span className="font-mono text-sm text-ink-faint">{index}</span>
               <span className="flex h-9 w-9 items-center justify-center rounded-md border border-hairline-strong text-brass">

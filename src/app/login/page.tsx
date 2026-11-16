@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Mail, Lock, ArrowRight, AlertCircle } from "lucide-react";
 import AuthShell from "@/components/AuthShell";
+import { mensagemErroAuth } from "@/lib/mensagensErro";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -26,7 +27,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setError("Email ou senha incorretos");
+      setError(mensagemErroAuth(error));
       setLoading(false);
       return;
     }

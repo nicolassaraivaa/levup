@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import Sidebar from "@/components/Sidebar";
+import { mensagemErroAuth } from "@/lib/mensagensErro";
 import {
   Settings,
   User,
@@ -98,7 +99,7 @@ export default function ConfiguracoesPage() {
     const { error } = await supabase.auth.updateUser({ password: novaSenha });
 
     if (error) {
-      setErroSenha(error.message || "Não foi possível alterar a senha.");
+      setErroSenha(mensagemErroAuth(error));
     } else {
       setSucessoSenha(true);
       setNovaSenha("");
