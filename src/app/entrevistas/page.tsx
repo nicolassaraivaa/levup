@@ -75,6 +75,10 @@ function formatarLimiteMinutos(segundos: number) {
 
 const MAX_HISTORICO_ENTREVISTAS = 5;
 
+// Se o servidor falhar ao receber uma resposta, o cronômetro volta de onde
+// parou, mas com pelo menos esse tempo para o candidato reenviar.
+const TEMPO_MINIMO_APOS_ERRO = 30;
+
 interface HistoricoEntrevista {
   id: string;
   created_at?: string;
@@ -109,6 +113,8 @@ export default function EntrevistasPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tempoRestante, setTempoRestante] = useState(TEMPO_LIMITE_SEGUNDOS);
   const [historico, setHistorico] = useState<HistoricoEntrevista[]>([]);
+  // Respostas já registradas cujo feedback final falhou: permite tentar de novo.
+  const [feedbackPendente, setFeedbackPendente] = useState<RespostaEntrevista[] | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
@@ -158,9 +164,9 @@ export default function EntrevistasPage() {
 
   useEffect(() => () => pararTimer(), []);
 
-  function iniciarTimer() {
+  function iniciarTimer(segundos = TEMPO_LIMITE_SEGUNDOS) {
     pararTimer();
-    setTempoRestante(TEMPO_LIMITE_SEGUNDOS);
+    setTempoRestante(segundos);
     timerRef.current = setInterval(() => {
       setTempoRestante((t) => {
         if (t <= 1) {
@@ -226,8 +232,9 @@ export default function EntrevistasPage() {
     ];
     const proximoSlot = plano[respostasParaEnvio.length];
 
+    let data;
     try {
-      const data = await postEntrevista({
+      data = await postEntrevista({
         area: areaSelecionada,
         nivel: nivelSelecionado,
         etapa: "pergunta",
@@ -235,29 +242,53 @@ export default function EntrevistasPage() {
         tema: proximoSlot?.tema,
         tipo: proximoSlot?.tipo,
       });
-
-      const respostasAtualizadas: RespostaEntrevista[] = [
-        ...respostas,
-        {
-          tipo: tipoRespondido,
-          tema: temaRespondido,
-          pergunta: perguntaRespondida,
-          resposta: textoResposta,
-          score: data.score_ultima_resposta,
-        },
-      ];
-      setRespostas(respostasAtualizadas);
-
-      if (data.finalizado || !proximoSlot) {
-        await finalizarComFeedback(respostasAtualizadas);
-      } else {
-        setPerguntaAtual(data.pergunta);
-        setTemaAtual(proximoSlot.tema);
-        setTipoAtual(proximoSlot.tipo);
-        iniciarTimer();
-      }
     } catch (err) {
+      // A resposta não foi registrada: devolve o texto ao campo e retoma o
+      // cronômetro de onde parou, com um mínimo para dar tempo de reenviar
+      // (a falha foi do servidor, não do candidato).
       setErro(mensagemDeErro(err));
+      setInputUsuario(textoResposta);
+      iniciarTimer(Math.max(tempoRestante, TEMPO_MINIMO_APOS_ERRO));
+      setLoading(false);
+      return;
+    }
+
+    const respostasAtualizadas: RespostaEntrevista[] = [
+      ...respostas,
+      {
+        tipo: tipoRespondido,
+        tema: temaRespondido,
+        pergunta: perguntaRespondida,
+        resposta: textoResposta,
+        score: data.score_ultima_resposta,
+      },
+    ];
+    setRespostas(respostasAtualizadas);
+
+    if (data.finalizado || !proximoSlot) {
+      // A última pergunta já está no histórico da conversa.
+      setPerguntaAtual("");
+      await gerarFeedback(respostasAtualizadas);
+    } else {
+      setPerguntaAtual(data.pergunta);
+      setTemaAtual(proximoSlot.tema);
+      setTipoAtual(proximoSlot.tipo);
+      iniciarTimer();
+      setLoading(false);
+    }
+  }
+
+  async function gerarFeedback(respostasFinais: RespostaEntrevista[]) {
+    setLoading(true);
+    setErro("");
+    setFeedbackPendente(null);
+    try {
+      await finalizarComFeedback(respostasFinais);
+    } catch (err) {
+      // Todas as respostas já foram registradas: só falta o feedback, então
+      // a tela oferece tentar de novo em vez de aceitar outra resposta.
+      setErro(mensagemDeErro(err));
+      setFeedbackPendente(respostasFinais);
     } finally {
       setLoading(false);
     }
@@ -299,6 +330,8 @@ export default function EntrevistasPage() {
     setPerguntaAtual("");
     setInputUsuario("");
     setFeedback(null);
+    setFeedbackPendente(null);
+    setErro("");
     setTempoRestante(TEMPO_LIMITE_SEGUNDOS);
   }
 
@@ -562,33 +595,45 @@ export default function EntrevistasPage() {
                   {erro}
                 </div>
               )}
-              <div className="flex gap-3">
-                <textarea
-                  value={inputUsuario}
-                  onChange={(e) => setInputUsuario(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      enviarResposta();
-                    }
-                  }}
-                  placeholder="Digite sua resposta..."
-                  maxLength={LIMITES.textoResposta}
-                  rows={2}
-                  disabled={loading}
-                  className="flex-1 bg-surface-raised border border-hairline-strong rounded-xl px-4 py-3 text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition resize-none text-sm"
-                />
+              {feedbackPendente ? (
                 <button
-                  onClick={enviarResposta}
-                  disabled={!inputUsuario.trim() || loading}
-                  className="bg-brass hover:bg-brass-strong disabled:opacity-50 text-background px-5 rounded-xl transition font-semibold"
+                  onClick={() => gerarFeedback(feedbackPendente)}
+                  disabled={loading}
+                  className="w-full bg-brass hover:bg-brass-strong disabled:opacity-50 text-background font-semibold py-3 rounded-xl transition"
                 >
-                  Enviar
+                  {loading ? "Gerando feedback..." : "Gerar o feedback de novo"}
                 </button>
-              </div>
-              <p className="text-ink-faint text-xs mt-2">
-                Enter para enviar · Shift+Enter para nova linha
-              </p>
+              ) : (
+                <>
+                  <div className="flex gap-3">
+                    <textarea
+                      value={inputUsuario}
+                      onChange={(e) => setInputUsuario(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          enviarResposta();
+                        }
+                      }}
+                      placeholder="Digite sua resposta..."
+                      maxLength={LIMITES.textoResposta}
+                      rows={2}
+                      disabled={loading}
+                      className="flex-1 bg-surface-raised border border-hairline-strong rounded-xl px-4 py-3 text-ink placeholder-ink-faint focus:outline-none focus:border-brass transition resize-none text-sm"
+                    />
+                    <button
+                      onClick={enviarResposta}
+                      disabled={!inputUsuario.trim() || loading}
+                      className="bg-brass hover:bg-brass-strong disabled:opacity-50 text-background px-5 rounded-xl transition font-semibold"
+                    >
+                      Enviar
+                    </button>
+                  </div>
+                  <p className="text-ink-faint text-xs mt-2">
+                    Enter para enviar · Shift+Enter para nova linha
+                  </p>
+                </>
+              )}
             </div>
           </div>
         )}
