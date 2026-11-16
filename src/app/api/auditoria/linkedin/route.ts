@@ -1,5 +1,9 @@
 import { gerarJson } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
+import {
+  normalizarAnaliseLinkedIn,
+  validarAnaliseLinkedIn,
+} from "@/lib/validacaoIa";
 import { NextRequest, NextResponse } from "next/server";
 import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
@@ -132,13 +136,16 @@ Responda APENAS em JSON válido, sem markdown, com essa estrutura exata:
   "acoes": ["próximo passo recomendado 1", "próximo passo recomendado 2", "próximo passo recomendado 3"]
 }`;
 
-    const analise = await gerarJson(
-      {
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: "user", content }],
-      },
-      "Auditoria de LinkedIn",
+    const analise = normalizarAnaliseLinkedIn(
+      await gerarJson<unknown>(
+        {
+          max_tokens: 8192,
+          system: systemPrompt,
+          messages: [{ role: "user", content }],
+        },
+        "Auditoria de LinkedIn",
+        validarAnaliseLinkedIn,
+      ),
     );
 
     return NextResponse.json({ analise });

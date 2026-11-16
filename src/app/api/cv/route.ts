@@ -1,6 +1,7 @@
 import { gerarJson } from "@/lib/anthropic";
 import { exigirUsuario } from "@/lib/auth";
 import { buscarUrlPublica } from "@/lib/buscarUrlPublica";
+import { normalizarCurriculo, validarCurriculo } from "@/lib/validacaoIa";
 import { NextRequest, NextResponse } from "next/server";
 
 type VagaModo = "texto" | "url";
@@ -172,13 +173,16 @@ Idiomas: ${idiomas?.trim() || "não informado"}
 
 Gere o currículo completo em JSON conforme a estrutura pedida.`;
 
-    const curriculo = await gerarJson(
-      {
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userMessage }],
-      },
-      "Gerador de CV",
+    const curriculo = normalizarCurriculo(
+      await gerarJson<unknown>(
+        {
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userMessage }],
+        },
+        "Gerador de CV",
+        validarCurriculo,
+      ),
     );
 
     return NextResponse.json({ curriculo });

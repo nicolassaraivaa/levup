@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Profile, CurriculoGerado } from "@/lib/types";
+import { normalizarCurriculo } from "@/lib/validacaoIa";
 import Sidebar from "@/components/Sidebar";
 import {
   FileText,
@@ -206,7 +207,7 @@ export default function CVPage() {
   }
 
   function verHistorico(item: HistoricoCV) {
-    setCurriculo(item.curriculo);
+    setCurriculo(normalizarCurriculo(item.curriculo));
     setEtapa("resultado");
   }
 

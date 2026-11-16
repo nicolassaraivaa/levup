@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Profile, ObjetivoAnalise, AnaliseLinkedIn, SecaoAnaliseLinkedIn } from "@/lib/types";
+import { normalizarAnaliseLinkedIn } from "@/lib/validacaoIa";
 import Sidebar from "@/components/Sidebar";
 import ObjetivoSelect from "@/components/ObjetivoSelect";
 import LinkedInIcon from "@/components/icons/LinkedInIcon";
@@ -237,7 +238,7 @@ export default function AuditoriaPage() {
   }
 
   function verHistorico(item: HistoricoAuditoria) {
-    setResultado(item.report);
+    setResultado(normalizarAnaliseLinkedIn(item.report));
     setStatus("done");
     setAba("resumo");
   }
