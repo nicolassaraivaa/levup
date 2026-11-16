@@ -48,3 +48,6 @@ skills-lock.json
 
 # logs do next dev
 .next-dev.log
+
+# saída do Vitest (gerada localmente, ex.: pela extensão do editor)
+.vitest/
